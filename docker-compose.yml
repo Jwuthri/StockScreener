@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+      - ~/Library/Application Support/Arc/User Data/Default/Cookies:/cookies/arc:ro
+    environment:
+      - DEBUG=1
+      - PYTHONUNBUFFERED=1
+      - DB_PATH=/app/data/stock_screener.db
+      - POLYGON_API_KEY=opgFHpW1UuaoHrV0Apdo7drKngapj88e
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
