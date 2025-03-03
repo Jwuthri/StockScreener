@@ -352,23 +352,27 @@ const StockScreener = () => {
         console.log("First stock in response:", response.data.stocks[0]);
         
         const processedStocks = response.data.stocks.map(stock => {
-          // Detailed logging for each stock
-          console.log(`Processing stock ${stock.symbol}:`, {
-            raw_price: stock.price,
-            price_display: stock.price_display,
-            raw_change_percent: stock.change_percent,
-            change_percent_display: stock.change_percent_display,
-            volume: stock.volume,
-            volume_display: stock.volume_display
-          });
-          
-          return {
+          // Format values properly for display if needed
+          const formattedStock = {
             ...stock,
-            // Use display values directly since they're already formatted correctly
-            price: stock.price_display || 'N/A',
-            change_percent: stock.change_percent_display || 'N/A',
-            volume: stock.volume_display || 'N/A'
+            // Use the price_display when price is null or undefined
+            price: stock.price_display || 
+                  (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` : 'N/A'),
+            
+            // Use the change_percent_display when change_percent is null or undefined
+            change_percent: stock.change_percent_display || 
+                           (typeof stock.change_percent === 'number' ? `${stock.change_percent.toFixed(2)}%` : 'N/A'),
+            
+            // Use the volume_display when volume is null or undefined
+            volume: stock.volume_display || 
+                   (typeof stock.volume === 'number' ? 
+                    stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
+                    stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
+                    stock.volume.toString() : 'N/A')
           };
+          
+          console.log(`Processed stock ${stock.symbol}:`, formattedStock);
+          return formattedStock;
         });
         
         console.log("Processed stocks:", processedStocks);
@@ -475,34 +479,41 @@ const StockScreener = () => {
           console.log("First stock in response:", response.data.stocks[0]);
           
           const processedStocks = response.data.stocks.map(stock => {
-            // Detailed logging for each stock
-            console.log(`Processing stock ${stock.symbol}:`, {
-              raw_price: stock.price,
-              price_display: stock.price_display,
-              raw_change_percent: stock.change_percent,
-              change_percent_display: stock.change_percent_display,
-              volume: stock.volume,
-              volume_display: stock.volume_display
-            });
-            
-            return {
+            // Format values properly for display if needed
+            const formattedStock = {
               ...stock,
-              // Use display values directly since they're already formatted correctly
-              price: stock.price_display || 'N/A',
-              change_percent: stock.change_percent_display || 'N/A',
-              volume: stock.volume_display || 'N/A'
+              // Use the price_display when price is null or undefined
+              price: stock.price_display || 
+                    (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` : 'N/A'),
+              
+              // Use the change_percent_display when change_percent is null or undefined
+              change_percent: stock.change_percent_display || 
+                             (typeof stock.change_percent === 'number' ? `${stock.change_percent.toFixed(2)}%` : 'N/A'),
+              
+              // Use the volume_display when volume is null or undefined
+              volume: stock.volume_display || 
+                     (typeof stock.volume === 'number' ? 
+                      stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
+                      stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
+                      stock.volume.toString() : 'N/A')
             };
+            
+            console.log(`Processed stock ${stock.symbol}:`, formattedStock);
+            return formattedStock;
           });
           
           console.log("Processed stocks:", processedStocks);
           setStocks(processedStocks);
+          setRawStocksData(response.data.stocks); // Store the raw data for reference
         } else {
           console.log("No stocks found in response");
           setStocks([]);
+          setRawStocksData([]);
         }
       } catch (error) {
         console.error("Error fetching stocks:", error);
         setStocks([]);
+        setRawStocksData([]);
       }
       
       setLastUpdated(new Date());
@@ -511,6 +522,7 @@ const StockScreener = () => {
       console.error('Error finding stocks crossing above previous day high:', error);
       setError('Error fetching stocks crossing above previous day high. Please try again.');
       setStocks([]);
+      setRawStocksData([]);
       setLoading(false);
     }
   };
@@ -1049,6 +1061,9 @@ const StockScreener = () => {
               <Tabs
                 value={selectedFilterTab}
                 onChange={handleFilterTabChange}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="standard"
                 sx={{ mb: 2 }}
               >
                 <Tab label="Price" value="price" />
@@ -1058,32 +1073,163 @@ const StockScreener = () => {
               </Tabs>
               
               {selectedFilterTab === 'price' && (
-                <Box sx={{ p: 1 }}>
-                  <ToggleButtonGroup
-                    value={priceFilterType}
-                    exclusive
-                    onChange={handlePriceFilterTypeChange}
-                    sx={{ mb: 2, display: 'flex' }}
-                  >
-                    <ToggleButton value="range" sx={{ flex: 1 }}>Price Range</ToggleButton>
-                    <ToggleButton value="above" sx={{ flex: 1 }}>Price Above</ToggleButton>
-                    <ToggleButton value="below" sx={{ flex: 1 }}>Price Below</ToggleButton>
-                  </ToggleButtonGroup>
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={priceFilterType}
+                      exclusive
+                      onChange={handlePriceFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="range">Price Range</ToggleButton>
+                      <ToggleButton value="above">Above Price</ToggleButton>
+                      <ToggleButton value="below">Below Price</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {priceFilterType === "range" && (
+                      <>
+                        <Typography gutterBottom>
+                          Price Range: ${priceRange[0]} to ${priceRange[1]}
+                        </Typography>
+                        <Slider
+                          value={priceRange}
+                          onChange={handlePriceRangeChange}
+                          valueLabelDisplay="auto"
+                          min={0}
+                          max={500}
+                          step={1}
+                        />
+                      </>
+                    )}
+                    
+                    {priceFilterType === "above" && (
+                      <TextField
+                        label="Price Above"
+                        type="number"
+                        value={priceAbove}
+                        onChange={(e) => setPriceAbove(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                    
+                    {priceFilterType === "below" && (
+                      <TextField
+                        label="Price Below"
+                        type="number"
+                        value={priceBelow}
+                        onChange={(e) => setPriceBelow(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                  </Box>
                 </Box>
               )}
               
               {selectedFilterTab === 'change' && (
-                <Box sx={{ p: 1 }}>
-                  <ToggleButtonGroup
-                    value={changeFilterType}
-                    exclusive
-                    onChange={handleChangeFilterTypeChange}
-                    sx={{ mb: 2, display: 'flex' }}
-                  >
-                    <ToggleButton value="any" sx={{ flex: 1 }}>Change Range</ToggleButton>
-                    <ToggleButton value="up" sx={{ flex: 1 }}>Up by at least</ToggleButton>
-                    <ToggleButton value="down" sx={{ flex: 1 }}>Down by at least</ToggleButton>
-                  </ToggleButtonGroup>
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={changeFilterType}
+                      exclusive
+                      onChange={handleChangeFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="any">Any Change Range</ToggleButton>
+                      <ToggleButton value="up">% Up Only</ToggleButton>
+                      <ToggleButton value="down">% Down Only</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {changeFilterType === "any" && (
+                      <>
+                        <Typography gutterBottom>
+                          Change %: {changeRange[0]}% to {changeRange[1]}%
+                        </Typography>
+                        <Slider
+                          value={changeRange}
+                          onChange={handleChangeRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPercentage}
+                          min={-20}
+                          max={20}
+                          step={0.5}
+                        />
+                      </>
+                    )}
+                    
+                    {changeFilterType === "up" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Change"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Change"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                    
+                    {changeFilterType === "down" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Down"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Down"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                  </Box>
                 </Box>
               )}
               
@@ -1239,8 +1385,8 @@ const StockScreener = () => {
                 sx={{ mb: 2 }}
               >
                 <Tab label="Price" value="price" />
-                <Tab label="Volume" value="volume" />
                 <Tab label="Change %" value="change" />
+                <Tab label="Volume" value="volume" />
                 <Tab label="Sector" value="sector" />
               </Tabs>
               
@@ -1626,13 +1772,8 @@ const StockScreener = () => {
                         <TableCell sx={{ py: 2 }}>{stock.name || 'N/A'}</TableCell>
                         <TableCell align="right" sx={{ py: 2 }}>
                           {(() => {
-                            // Make sure we're handling all possible price formats
-                            const price = stock.price !== undefined ? stock.price : (
-                              stock.current_price !== undefined ? stock.current_price : (
-                                stock.close !== undefined ? stock.close : null
-                              )
-                            );
-                            return formatPrice(price);
+                            // Just use the already formatted price from our processedStocks
+                            return stock.price || 'N/A';
                           })()}
                         </TableCell>
                         <TableCell 
@@ -1640,30 +1781,18 @@ const StockScreener = () => {
                           sx={{ 
                             py: 2,
                             color: (() => {
-                              // Safely determine the color based on change_percent
-                              const changePercent = stock.change_percent !== undefined ? stock.change_percent : (
-                                stock.percent_change !== undefined ? stock.percent_change : (
-                                  stock.change !== undefined ? stock.change : 0
-                                )
-                              );
-                              const numValue = typeof changePercent === 'string' ? parseFloat(changePercent) : changePercent;
-                              return !isNaN(numValue) && numValue >= 0 ? 'success.main' : 'error.main';
-                            })(),
-                            fontWeight: 'bold'
+                              // Parse change percentage to determine color
+                              const changeText = stock.change_percent || '';
+                              if (changeText.includes('-')) return 'error.main';
+                              if (changeText.includes('+') || changeText.match(/[0-9]/)) return 'success.main';
+                              return 'text.primary';
+                            })()
                           }}
                         >
-                          {(() => {
-                            // Make sure we're handling all possible change_percent formats
-                            const changePercent = stock.change_percent !== undefined ? stock.change_percent : (
-                              stock.percent_change !== undefined ? stock.percent_change : (
-                                stock.change !== undefined ? stock.change : null
-                              )
-                            );
-                            return formatPercentageChange(changePercent);
-                          })()}
+                          {stock.change_percent || 'N/A'}
                         </TableCell>
                         <TableCell align="right" sx={{ py: 2 }}>
-                          {formatVolume(stock.volume)}
+                          {stock.volume || 'N/A'}
                         </TableCell>
                         <TableCell align="right" sx={{ py: 2 }}>
                           <Chip 
