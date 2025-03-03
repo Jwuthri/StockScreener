@@ -56,11 +56,6 @@ const Dashboard = () => {
   }, [location.search, navigate]);
   
   useEffect(() => {
-    console.log("Dashboard component mounted");
-    
-    // Add this to help debug API URL issues
-    console.log("API URL:", API_URL);
-    
     fetchDashboardData();
   }, []);
   

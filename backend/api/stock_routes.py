@@ -114,84 +114,47 @@ async def get_stock_history(symbol: str, period: str = "1mo"):
 
 @router.get("/popular")
 async def get_popular_stocks():
-    """Get a list of popular stocks."""
-    # This would typically be based on some logic like most viewed
-    # For now, we'll return a static list of popular stocks
-    popular_symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA"]
-    results = []
-    
-    for symbol in popular_symbols:
-        try:
-            stock = Stock.get(Stock.symbol == symbol)
-            results.append({
-                "symbol": stock.symbol,
-                "name": stock.name,
-                "sector": stock.sector
-            })
-        except Stock.DoesNotExist:
-            # Fetch and save if not in DB
-            stock_data = fetch_stock_info(symbol)
-            if stock_data:
-                stock = save_stock_to_db(stock_data)
-                if stock:
-                    results.append({
-                        "symbol": stock.symbol,
-                        "name": stock.name,
-                        "sector": stock.sector
-                    })
-    
-    return {"popular_stocks": results}
+    """Get a list of popular stocks based on market cap and trading volume."""
+    try:
+        # Get stocks with high market cap and volume
+        stocks = get_stocks_with_filters(
+            min_volume=1000000,  # Min 1M volume
+            limit=10
+        )
+        
+        # Format response
+        return {
+            "popular_stocks": stocks
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/gainers")
-async def get_gainers(limit: int = Query(10, ge=1, le=50)):
-    """Get the top gaining stocks for the day."""
+async def get_gainers(limit: int = 10):
+    """Get top gaining stocks using TradingView criteria."""
     try:
-        # First try TradingView API
-        gainers = get_top_gainers_tv(limit)
-        if gainers:
-            logger.info(f"Returning {len(gainers)} gainers from TradingView API")
-            return {"gainers": gainers}
+        gainers = get_top_gainers(limit=limit)
+        return {"gainers": gainers}
     except Exception as e:
-        logger.error(f"Error fetching gainers from TradingView: {str(e)}")
-    
-    # Fall back to yfinance
-    logger.info("Falling back to yfinance for gainers")
-    gainers = get_top_gainers(limit)
-    return {"gainers": gainers}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/losers")
-async def get_losers(limit: int = Query(10, ge=1, le=50)):
-    """Get the top losing stocks for the day."""
+async def get_losers(limit: int = 10):
+    """Get top losing stocks using TradingView criteria."""
     try:
-        # First try TradingView API
-        losers = get_top_losers_tv(limit)
-        if losers:
-            logger.info(f"Returning {len(losers)} losers from TradingView API")
-            return {"losers": losers}
+        losers = get_top_losers(limit=limit)
+        return {"losers": losers}
     except Exception as e:
-        logger.error(f"Error fetching losers from TradingView: {str(e)}")
-    
-    # Fall back to yfinance
-    logger.info("Falling back to yfinance for losers")
-    losers = get_top_losers(limit)
-    return {"losers": losers}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/most-active")
-async def get_active(limit: int = Query(10, ge=1, le=50)):
-    """Get the most active stocks by volume."""
+async def get_active_stocks(limit: int = 10):
+    """Get most active stocks by volume using TradingView criteria."""
     try:
-        # First try TradingView API
-        active_stocks = get_most_active_tv(limit)
-        if active_stocks:
-            logger.info(f"Returning {len(active_stocks)} active stocks from TradingView API")
-            return {"most_active": active_stocks}
+        active = get_most_active(limit=limit)
+        return {"most_active": active}
     except Exception as e:
-        logger.error(f"Error fetching active stocks from TradingView: {str(e)}")
-    
-    # Fall back to yfinance
-    logger.info("Falling back to yfinance for most active stocks")
-    active_stocks = get_most_active(limit)
-    return {"most_active": active_stocks}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/tradingview/filter")
 async def filter_stocks(

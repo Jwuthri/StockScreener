@@ -1,16 +1,16 @@
 import logging
 from typing import List, Dict, Any, Optional
-import pandas as pd
 from tradingview_screener import Query, col
+import pandas as pd
 import rookiepy
 from datetime import datetime, timedelta
 import random
 from rich.logging import RichHandler
 from rich.console import Console
 from rich.traceback import install
-import math
 from enum import Enum
 import json
+
 
 # Define Interval enum that was missing
 class Interval(Enum):
@@ -38,7 +38,6 @@ logging.basicConfig(
 
 # Get logger
 logger = logging.getLogger("tradingview")
-
 def get_cookies_from_browser():
     """
     Get TradingView cookies from browsers.
@@ -121,7 +120,6 @@ def explore_available_fields():
     except Exception as e:
         logger.error(f"Error exploring TradingView fields: {str(e)}")
         return False
-
 def get_top_gainers(limit: int = 10) -> List[Dict[str, Any]]:
     """
     Get top gaining stocks using TradingView API.
@@ -1444,4 +1442,5 @@ def get_first_five_min_candle(symbol: str) -> Dict[str, Any]:
             "first_5min_close": None,
             "first_5min_volume": None
         }
+
 

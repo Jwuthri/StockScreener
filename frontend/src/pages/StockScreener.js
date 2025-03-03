@@ -39,14 +39,18 @@ const StockScreener = () => {
   const [rawStocksData, setRawStocksData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [popularStocks, setPopularStocks] = useState([]);
+  const [topGainers, setTopGainers] = useState([]);
+  const [topLosers, setTopLosers] = useState([]);
+  const [mostActive, setMostActive] = useState([]);
+  const [selectedTab, setSelectedTab] = useState('popular');
   const [sector, setSector] = useState('');
   const [sectors, setSectors] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [error, setError] = useState('');
   
   // Advanced filter states
-  const [priceRange, setPriceRange] = useState([0, 50]);
-  const [changeRange, setChangeRange] = useState([-10, 10]);
+  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [changeRange, setChangeRange] = useState([-500, 500]);
   const [minVolume, setMinVolume] = useState(100000);
   const [showPositiveCandles, setShowPositiveCandles] = useState(false);
   const [showPrevDayHighCross, setShowPrevDayHighCross] = useState(true);
@@ -278,7 +282,28 @@ const StockScreener = () => {
     setLoading(false);
   };
   
-  const formatPercentage = (value) => `${value}%`;
+  const formatPercentage = (value) => {
+    // If already formatted (includes % or starts with + or -), return as is
+    if (typeof value === 'string' && (value.includes('%') || value.startsWith('+') || value.startsWith('-'))) {
+      return value;
+    }
+    
+    // Return N/A for null or undefined
+    if (value === null || value === undefined) {
+      return 'N/A';
+    }
+    
+    // Convert to number if not already
+    const numValue = typeof value === 'number' ? value : Number(value);
+    
+    // If not a number, show N/A
+    if (isNaN(numValue)) {
+      return 'N/A';
+    }
+    
+    // Format with sign and 2 decimal places
+    return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`;
+  };
   
   const handlePositiveCandlesSearch = async () => {
     try {
@@ -420,7 +445,7 @@ const StockScreener = () => {
       const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-high`;
       
       const params = {
-        limit: maxResults  // Use the maxResults state variable instead of hardcoded 50
+        limit: maxResults  // Use the maxResults state variable instead of hardcoded 500
       };
       
       // Only add advanced filter parameters if advanced filters are shown
@@ -601,31 +626,7 @@ const StockScreener = () => {
     
     return value;
   };
-
-  // Format percentage change values for display
-  const formatPercentageChange = (value) => {
-    // If already formatted (includes % or starts with + or -), return as is
-    if (typeof value === 'string' && (value.includes('%') || value.startsWith('+') || value.startsWith('-'))) {
-      return value;
-    }
-    
-    // Return N/A for null or undefined
-    if (value === null || value === undefined) {
-      return 'N/A';
-    }
-    
-    // Convert to number if not already
-    const numValue = typeof value === 'number' ? value : Number(value);
-    
-    // If not a number, show N/A
-    if (isNaN(numValue)) {
-      return 'N/A';
-    }
-    
-    // Format with sign and 2 decimal places
-    return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`;
-  };
-
+  
   // Format price for display
   const formatPrice = (value) => {
     // If already formatted (includes $ or currency formatting), return as is
@@ -855,43 +856,237 @@ const StockScreener = () => {
     }
   };
 
+  // Fetch market trends data
+  const fetchMarketTrends = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const endpoints = {
+        popular: `${API_URL}/api/stocks/popular`,
+        gainers: `${API_URL}/api/stocks/gainers`,
+        losers: `${API_URL}/api/stocks/losers`,
+        active: `${API_URL}/api/stocks/most-active`
+      };
+
+      const [popularRes, gainersRes, losersRes, activeRes] = await Promise.all([
+        axios.get(endpoints.popular),
+        axios.get(endpoints.gainers),
+        axios.get(endpoints.losers),
+        axios.get(endpoints.active)
+      ]);
+
+      // Process and set the data
+      setPopularStocks(popularRes.data.popular_stocks || []);
+      setTopGainers(gainersRes.data.gainers || []);
+      setTopLosers(losersRes.data.losers || []);
+      setMostActive(activeRes.data.most_active || []);
+
+      // Extract unique sectors and industries for filters
+      const allStocks = [
+        ...(popularRes.data.popular_stocks || []),
+        ...(gainersRes.data.gainers || []),
+        ...(losersRes.data.losers || []),
+        ...(activeRes.data.most_active || [])
+      ];
+
+      const uniqueSectors = [...new Set(allStocks
+        .filter(stock => stock.sector)
+        .map(stock => stock.sector))];
+      setSectors(uniqueSectors);
+
+      const uniqueIndustries = [...new Set(allStocks
+        .filter(stock => stock.industry)
+        .map(stock => stock.industry))];
+      setIndustries(uniqueIndustries);
+
+      // Set the stocks based on selected tab
+      updateDisplayedStocks(selectedTab, {
+        popular: popularRes.data.popular_stocks,
+        gainers: gainersRes.data.gainers,
+        losers: losersRes.data.losers,
+        active: activeRes.data.most_active
+      });
+
+    } catch (error) {
+      console.error('Error fetching market trends:', error);
+      setError('Failed to fetch market data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper function to update displayed stocks based on selected tab
+  const updateDisplayedStocks = (tab, data) => {
+    switch (tab) {
+      case 'popular':
+        setStocks(data.popular || []);
+        break;
+      case 'gainers':
+        setStocks(data.gainers || []);
+        break;
+      case 'losers':
+        setStocks(data.losers || []);
+        break;
+      case 'active':
+        setStocks(data.active || []);
+        break;
+      default:
+        setStocks(data.popular || []);
+    }
+  };
+
+  // Handle tab change
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+    updateDisplayedStocks(newValue, {
+      popular: popularStocks,
+      gainers: topGainers,
+      losers: topLosers,
+      active: mostActive
+    });
+  };
+
+  useEffect(() => {
+    fetchMarketTrends();
+  }, []);
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          p: 3, 
-          borderRadius: 2,
-          background: 'linear-gradient(to right, #f8f9fa, #e9ecef)',
-          mb: 4 
-        }}
-      >
-        <Typography 
-          variant="h4" 
-          gutterBottom 
-          sx={{ 
-            fontWeight: 600, 
-            color: '#2c3e50',
-            mb: 2,
-            display: 'flex',
-            alignItems: 'center' 
-          }}
-        >
-          <ShowChartIcon sx={{ mr: 1, fontSize: 36 }} />
+    <Container maxWidth="xl">
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" gutterBottom>
           Stock Screener
         </Typography>
         
-        <Typography 
-          variant="subtitle1" 
-          gutterBottom 
-          sx={{ 
-            color: '#7f8c8d',
-            mb: 3 
-          }}
-        >
-          Find real-time stock opportunities with advanced filtering options
-        </Typography>
-        
+        {/* Market Trends Tabs */}
+        <Paper sx={{ mb: 3 }}>
+          <Tabs
+            value={selectedTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            indicatorColor="primary"
+            textColor="primary"
+            sx={{ borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab 
+              icon={<ShowChartIcon />} 
+              label="Popular" 
+              value="popular"
+              iconPosition="start"
+            />
+            <Tab 
+              icon={<TrendingUpIcon />} 
+              label="Top Gainers" 
+              value="gainers"
+              iconPosition="start"
+              sx={{ color: 'success.main' }}
+            />
+            <Tab 
+              icon={<TrendingUpIcon sx={{ transform: 'rotate(180deg)' }} />} 
+              label="Top Losers" 
+              value="losers"
+              iconPosition="start"
+              sx={{ color: 'error.main' }}
+            />
+            <Tab 
+              icon={<BarChartIcon />} 
+              label="Most Active" 
+              value="active"
+              iconPosition="start"
+            />
+          </Tabs>
+
+          {/* Market Trends Content */}
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                {selectedTab === 'popular' && 'Popular Stocks'}
+                {selectedTab === 'gainers' && 'Top Gainers'}
+                {selectedTab === 'losers' && 'Top Losers'}
+                {selectedTab === 'active' && 'Most Active'}
+              </Typography>
+              <Box>
+                <Chip 
+                  label={`${stocks.length} stocks`}
+                  color={
+                    selectedTab === 'gainers' ? 'success' :
+                    selectedTab === 'losers' ? 'error' :
+                    'primary'
+                  }
+                  size="small"
+                  sx={{ mr: 1 }}
+                />
+                <IconButton 
+                  size="small" 
+                  onClick={refreshData}
+                  disabled={loading}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Box>
+            </Box>
+
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+            ) : stocks.length === 0 ? (
+              <Alert severity="info">No stocks available for this category.</Alert>
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Symbol</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell align="right">Price</TableCell>
+                      <TableCell align="right">Change</TableCell>
+                      <TableCell align="right">Volume</TableCell>
+                      {selectedTab !== 'popular' && (
+                        <TableCell align="right">Market Cap</TableCell>
+                      )}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {stocks.map((stock) => (
+                      <TableRow
+                        key={stock.symbol}
+                        hover
+                        onClick={() => navigateToStockDetails(stock.symbol)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>
+                          <Typography fontWeight="bold">{stock.symbol}</Typography>
+                        </TableCell>
+                        <TableCell>{stock.name}</TableCell>
+                        <TableCell align="right">{stock.price}</TableCell>
+                        <TableCell 
+                          align="right"
+                          sx={{ 
+                            color: parseFloat(stock.change_percent) >= 0 ? 'success.main' : 'error.main',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {formatPercentage(stock.change_percent)}
+                        </TableCell>
+                        <TableCell align="right">{formatVolume(stock.volume)}</TableCell>
+                        {selectedTab !== 'popular' && (
+                          <TableCell align="right">
+                            {stock.market_cap ? `$${(stock.market_cap / 1e9).toFixed(2)}B` : 'N/A'}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        </Paper>
+
+        {/* Rest of the existing code */}
         <Paper 
           elevation={searchFocused ? 8 : 2} 
           sx={{ 
@@ -1062,7 +1257,7 @@ const StockScreener = () => {
             Refresh Data
           </Button>
         </Box>
-      </Paper>
+      </Box>
 
       {/* Screener Options */}
       <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 2, fontWeight: 600 }}>
@@ -1342,9 +1537,10 @@ const StockScreener = () => {
                           value={priceRange}
                           onChange={handlePriceRangeChange}
                           valueLabelDisplay="auto"
+                          valueLabelFormat={formatPrice}
                           min={0}
-                          max={500}
-                          step={1}
+                          max={2000}
+                          sx={{ mt: 1 }}
                         />
                       </>
                     )}
@@ -1406,9 +1602,9 @@ const StockScreener = () => {
                           onChange={handleChangeRangeChange}
                           valueLabelDisplay="auto"
                           valueLabelFormat={formatPercentage}
-                          min={-20}
-                          max={20}
-                          step={0.5}
+                          min={-200}
+                          max={200}
+                          sx={{ mt: 1 }}
                         />
                       </>
                     )}
@@ -1653,7 +1849,646 @@ const StockScreener = () => {
           {/* Advanced Filters Content - reuse the same content as positive candles */}
           {showAdvancedInPC && (
             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              {/* Reuse the same advanced filters content */}
+              <Typography variant="subtitle1" gutterBottom>
+                Narrow down stocks:
+              </Typography>
+              
+              <Tabs
+                value={selectedFilterTab}
+                onChange={handleFilterTabChange}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="standard"
+                sx={{ mb: 2 }}
+              >
+                <Tab label="Price" value="price" />
+                <Tab label="Change %" value="change" />
+                <Tab label="Volume" value="volume" />
+                <Tab label="Sector" value="sector" />
+              </Tabs>
+              
+              {selectedFilterTab === "price" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={priceFilterType}
+                      exclusive
+                      onChange={handlePriceFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="range">Price Range</ToggleButton>
+                      <ToggleButton value="above">Above Price</ToggleButton>
+                      <ToggleButton value="below">Below Price</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {priceFilterType === "range" && (
+                      <>
+                        <Typography gutterBottom>
+                          Price Range: ${priceRange[0]} to ${priceRange[1]}
+                        </Typography>
+                        <Slider
+                          value={priceRange}
+                          onChange={handlePriceRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPrice}
+                          min={0}
+                          max={2000}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {priceFilterType === "above" && (
+                      <TextField
+                        label="Price Above"
+                        type="number"
+                        value={priceAbove}
+                        onChange={(e) => setPriceAbove(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                    
+                    {priceFilterType === "below" && (
+                      <TextField
+                        label="Price Below"
+                        type="number"
+                        value={priceBelow}
+                        onChange={(e) => setPriceBelow(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "change" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={changeFilterType}
+                      exclusive
+                      onChange={handleChangeFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="any">Any Change Range</ToggleButton>
+                      <ToggleButton value="up">% Up Only</ToggleButton>
+                      <ToggleButton value="down">% Down Only</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {changeFilterType === "any" && (
+                      <>
+                        <Typography gutterBottom>
+                          Change %: {changeRange[0]}% to {changeRange[1]}%
+                        </Typography>
+                        <Slider
+                          value={changeRange}
+                          onChange={handleChangeRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPercentage}
+                          min={-200}
+                          max={200}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {changeFilterType === "up" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Change"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Change"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                    
+                    {changeFilterType === "down" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Down"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Down"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "volume" && (
+                <Box>
+                  <Typography gutterBottom>
+                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                  </Typography>
+                  <Slider
+                    value={volumeRange}
+                    onChange={handleVolumeRangeChange}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatVolume}
+                    min={1000}
+                    max={100000000}
+                    step={10000}
+                    scale={(x) => x}
+                  />
+                  
+                  <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Min Volume"
+                        type="number"
+                        value={volumeRange[0]}
+                        onChange={(e) => handleVolumeInputChange(0, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Max Volume"
+                        type="number"
+                        value={volumeRange[1]}
+                        onChange={(e) => handleVolumeInputChange(1, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "sector" && (
+                <Box sx={{ p: 1 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Sector</InputLabel>
+                        <Select
+                          value={sector}
+                          onChange={handleSectorChange}
+                          label="Sector"
+                        >
+                          <MenuItem value="">
+                            <em>All Sectors</em>
+                          </MenuItem>
+                          {sectors.map((sector) => (
+                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Industry</InputLabel>
+                        <Select
+                          value={industry}
+                          onChange={handleIndustryChange}
+                          label="Industry"
+                        >
+                          <MenuItem value="">
+                            <em>All Industries</em>
+                          </MenuItem>
+                          {industries.map((industryOption) => (
+                            <MenuItem key={industryOption} value={industryOption}>
+                              {industryOption}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                      <FormControl fullWidth>
+                        <InputLabel>Exchange</InputLabel>
+                        <Select
+                          value={exchange}
+                          onChange={handleExchangeChange}
+                          label="Exchange"
+                        >
+                          <MenuItem value="">
+                            <em>All Exchanges</em>
+                          </MenuItem>
+                          {exchanges.map((ex) => (
+                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+            </Box>
+          )}
+        </Paper>
+      )}
+      
+      {/* Above Previous Day High Screener */}
+      {showPrevDayHighCross && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6">Stocks Above Previous Day High Screener</Typography>
+          </Box>
+          
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This screener finds stocks that have their current price crossing above the previous day's high.
+            This can signal increased momentum and potential breakout opportunities.
+          </Alert>
+          
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={8}>
+              <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
+                <Typography variant="body1" color="text.secondary">
+                  Finds stocks currently trading above their previous day's high
+                </Typography>
+              </Paper>
+            </Grid>
+            
+            {/* Search Button */}
+            <Grid item xs={12} md={4}>
+              <Button
+                fullWidth
+                variant="contained"
+                color="primary"
+                onClick={handlePrevDayHighCrossSearch}
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
+                sx={{ height: '56px' }}
+              >
+                {loading ? 'Searching...' : 'Find Stocks'}
+              </Button>
+            </Grid>
+          </Grid>
+          
+          {/* Advanced Filters Toggle */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            p: 2, 
+            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+            borderRadius: 2,
+            mb: 2,
+            mt: 2
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="subtitle1" fontWeight={500}>
+                Advanced Filters
+              </Typography>
+            </Box>
+            <Switch 
+              checked={showAdvancedInPDHC}
+              onChange={(e) => setShowAdvancedInPDHC(e.target.checked)}
+              color="primary"
+            />
+          </Box>
+          
+          {/* Advanced Filters Content - reuse the same content as positive candles */}
+          {showAdvancedInPDHC && (
+            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Narrow down stocks:
+              </Typography>
+              
+              <Tabs
+                value={selectedFilterTab}
+                onChange={handleFilterTabChange}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="standard"
+                sx={{ mb: 2 }}
+              >
+                <Tab label="Price" value="price" />
+                <Tab label="Change %" value="change" />
+                <Tab label="Volume" value="volume" />
+                <Tab label="Sector" value="sector" />
+              </Tabs>
+              
+              {selectedFilterTab === "price" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={priceFilterType}
+                      exclusive
+                      onChange={handlePriceFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="range">Price Range</ToggleButton>
+                      <ToggleButton value="above">Above Price</ToggleButton>
+                      <ToggleButton value="below">Below Price</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {priceFilterType === "range" && (
+                      <>
+                        <Typography gutterBottom>
+                          Price Range: ${priceRange[0]} to ${priceRange[1]}
+                        </Typography>
+                        <Slider
+                          value={priceRange}
+                          onChange={handlePriceRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPrice}
+                          min={0}
+                          max={2000}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {priceFilterType === "above" && (
+                      <TextField
+                        label="Price Above"
+                        type="number"
+                        value={priceAbove}
+                        onChange={(e) => setPriceAbove(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                    
+                    {priceFilterType === "below" && (
+                      <TextField
+                        label="Price Below"
+                        type="number"
+                        value={priceBelow}
+                        onChange={(e) => setPriceBelow(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "change" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={changeFilterType}
+                      exclusive
+                      onChange={handleChangeFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="any">Any Change Range</ToggleButton>
+                      <ToggleButton value="up">% Up Only</ToggleButton>
+                      <ToggleButton value="down">% Down Only</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {changeFilterType === "any" && (
+                      <>
+                        <Typography gutterBottom>
+                          Change %: {changeRange[0]}% to {changeRange[1]}%
+                        </Typography>
+                        <Slider
+                          value={changeRange}
+                          onChange={handleChangeRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPercentage}
+                          min={-200}
+                          max={200}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {changeFilterType === "up" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Change"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Change"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                    
+                    {changeFilterType === "down" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Down"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Down"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              
+              {selectedFilterTab === "volume" && (
+                <Box>
+                  <Typography gutterBottom>
+                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                  </Typography>
+                  <Slider
+                    value={volumeRange}
+                    onChange={handleVolumeRangeChange}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatVolume}
+                    min={1000}
+                    max={100000000}
+                    step={10000}
+                    scale={(x) => x}
+                  />
+                  
+                  <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Min Volume"
+                        type="number"
+                        value={volumeRange[0]}
+                        onChange={(e) => handleVolumeInputChange(0, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Max Volume"
+                        type="number"
+                        value={volumeRange[1]}
+                        onChange={(e) => handleVolumeInputChange(1, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "sector" && (
+                <Box sx={{ p: 1 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Sector</InputLabel>
+                        <Select
+                          value={sector}
+                          onChange={handleSectorChange}
+                          label="Sector"
+                        >
+                          <MenuItem value="">
+                            <em>All Sectors</em>
+                          </MenuItem>
+                          {sectors.map((sector) => (
+                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Industry</InputLabel>
+                        <Select
+                          value={industry}
+                          onChange={handleIndustryChange}
+                          label="Industry"
+                        >
+                          <MenuItem value="">
+                            <em>All Industries</em>
+                          </MenuItem>
+                          {industries.map((ind) => (
+                            <MenuItem key={ind} value={ind}>{ind}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                      <FormControl fullWidth>
+                        <InputLabel>Exchange</InputLabel>
+                        <Select
+                          value={exchange}
+                          onChange={handleExchangeChange}
+                          label="Exchange"
+                        >
+                          <MenuItem value="">
+                            <em>All Exchanges</em>
+                          </MenuItem>
+                          {exchanges.map((ex) => (
+                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
             </Box>
           )}
         </Paper>
@@ -1723,7 +2558,290 @@ const StockScreener = () => {
           {/* Advanced Filters Content - reuse the same content as Previous Day High Cross */}
           {showAdvancedInPDHC && (
             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              {/* Reuse the same advanced filters content */}
+              <Typography variant="subtitle1" gutterBottom>
+                Narrow down stocks:
+              </Typography>
+              
+              <Tabs
+                value={selectedFilterTab}
+                onChange={handleFilterTabChange}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="standard"
+                sx={{ mb: 2 }}
+              >
+                <Tab label="Price" value="price" />
+                <Tab label="Change %" value="change" />
+                <Tab label="Volume" value="volume" />
+                <Tab label="Sector" value="sector" />
+              </Tabs>
+              
+              {selectedFilterTab === "price" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={priceFilterType}
+                      exclusive
+                      onChange={handlePriceFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="range">Price Range</ToggleButton>
+                      <ToggleButton value="above">Above Price</ToggleButton>
+                      <ToggleButton value="below">Below Price</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {priceFilterType === "range" && (
+                      <>
+                        <Typography gutterBottom>
+                          Price Range: ${priceRange[0]} to ${priceRange[1]}
+                        </Typography>
+                        <Slider
+                          value={priceRange}
+                          onChange={handlePriceRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPrice}
+                          min={0}
+                          max={2000}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {priceFilterType === "above" && (
+                      <TextField
+                        label="Price Above"
+                        type="number"
+                        value={priceAbove}
+                        onChange={(e) => setPriceAbove(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                    
+                    {priceFilterType === "below" && (
+                      <TextField
+                        label="Price Below"
+                        type="number"
+                        value={priceBelow}
+                        onChange={(e) => setPriceBelow(Number(e.target.value))}
+                        fullWidth
+                        InputProps={{
+                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "change" && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <ToggleButtonGroup
+                      value={changeFilterType}
+                      exclusive
+                      onChange={handleChangeFilterTypeChange}
+                      fullWidth
+                      color="primary"
+                      sx={{ mb: 2 }}
+                    >
+                      <ToggleButton value="any">Any Change Range</ToggleButton>
+                      <ToggleButton value="up">% Up Only</ToggleButton>
+                      <ToggleButton value="down">% Down Only</ToggleButton>
+                    </ToggleButtonGroup>
+                    
+                    {changeFilterType === "any" && (
+                      <>
+                        <Typography gutterBottom>
+                          Change %: {changeRange[0]}% to {changeRange[1]}%
+                        </Typography>
+                        <Slider
+                          value={changeRange}
+                          onChange={handleChangeRangeChange}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={formatPercentage}
+                          min={-200}
+                          max={200}
+                          sx={{ mt: 1 }}
+                        />
+                      </>
+                    )}
+                    
+                    {changeFilterType === "up" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Change"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Change"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                    
+                    {changeFilterType === "down" && (
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Minimum % Down"
+                            type="number"
+                            value={changeMin}
+                            onChange={(e) => setChangeMin(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={6}>
+                          <TextField
+                            label="Maximum % Down"
+                            type="number"
+                            value={changeMax}
+                            onChange={(e) => setChangeMax(Number(e.target.value))}
+                            fullWidth
+                            InputProps={{
+                              endAdornment: <Typography>%</Typography>,
+                              inputProps: { min: 0 }
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    )}
+                  </Box>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "volume" && (
+                <Box>
+                  <Typography gutterBottom>
+                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                  </Typography>
+                  <Slider
+                    value={volumeRange}
+                    onChange={handleVolumeRangeChange}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatVolume}
+                    min={1000}
+                    max={100000000}
+                    step={10000}
+                    scale={(x) => x}
+                  />
+                  
+                  <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Min Volume"
+                        type="number"
+                        value={volumeRange[0]}
+                        onChange={(e) => handleVolumeInputChange(0, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Max Volume"
+                        type="number"
+                        value={volumeRange[1]}
+                        onChange={(e) => handleVolumeInputChange(1, e)}
+                        fullWidth
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+              
+              {selectedFilterTab === "sector" && (
+                <Box sx={{ p: 1 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Sector</InputLabel>
+                        <Select
+                          value={sector}
+                          onChange={handleSectorChange}
+                          label="Sector"
+                        >
+                          <MenuItem value="">
+                            <em>All Sectors</em>
+                          </MenuItem>
+                          {sectors.map((sector) => (
+                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Industry</InputLabel>
+                        <Select
+                          value={industry}
+                          onChange={handleIndustryChange}
+                          label="Industry"
+                        >
+                          <MenuItem value="">
+                            <em>All Industries</em>
+                          </MenuItem>
+                          {industries.map((ind) => (
+                            <MenuItem key={ind} value={ind}>{ind}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                      <FormControl fullWidth>
+                        <InputLabel>Exchange</InputLabel>
+                        <Select
+                          value={exchange}
+                          onChange={handleExchangeChange}
+                          label="Exchange"
+                        >
+                          <MenuItem value="">
+                            <em>All Exchanges</em>
+                          </MenuItem>
+                          {exchanges.map((ex) => (
+                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
             </Box>
           )}
         </Paper>
