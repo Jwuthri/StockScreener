@@ -368,7 +368,20 @@ const StockScreener = () => {
                    (typeof stock.volume === 'number' ? 
                     stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
                     stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
-                    stock.volume.toString() : 'N/A')
+                    stock.volume.toString() : 'N/A'),
+
+            // Format previous day metrics
+            prev_day_high_display: stock.prev_day_high_display || 
+                                 (typeof stock.prev_day_high === 'number' ? `$${stock.prev_day_high.toFixed(2)}` : 'N/A'),
+            
+            prev_day_close_display: stock.prev_day_close_display || 
+                                  (typeof stock.prev_day_close === 'number' ? `$${stock.prev_day_close.toFixed(2)}` : 'N/A'),
+            
+            prev_day_open_display: stock.prev_day_open_display || 
+                                 (typeof stock.prev_day_open === 'number' ? `$${stock.prev_day_open.toFixed(2)}` : 'N/A'),
+            
+            // For consecutive positive candles screener
+            consecutive_candles: stock.consecutive_candles || numCandles
           };
           
           console.log(`Processed stock ${stock.symbol}:`, formattedStock);
@@ -495,7 +508,20 @@ const StockScreener = () => {
                      (typeof stock.volume === 'number' ? 
                       stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
                       stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
-                      stock.volume.toString() : 'N/A')
+                      stock.volume.toString() : 'N/A'),
+
+              // Format previous day metrics
+              prev_day_high_display: stock.prev_day_high_display || 
+                                   (typeof stock.prev_day_high === 'number' ? `$${stock.prev_day_high.toFixed(2)}` : 'N/A'),
+              
+              prev_day_close_display: stock.prev_day_close_display || 
+                                    (typeof stock.prev_day_close === 'number' ? `$${stock.prev_day_close.toFixed(2)}` : 'N/A'),
+              
+              prev_day_open_display: stock.prev_day_open_display || 
+                                   (typeof stock.prev_day_open === 'number' ? `$${stock.prev_day_open.toFixed(2)}` : 'N/A'),
+              
+              // For consecutive positive candles screener
+              consecutive_candles: stock.consecutive_candles || numCandles
             };
             
             console.log(`Processed stock ${stock.symbol}:`, formattedStock);
@@ -1290,6 +1316,25 @@ const StockScreener = () => {
                         </Select>
                       </FormControl>
                     </Grid>
+                    
+                    {/* Add Exchange Selection */}
+                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                      <FormControl fullWidth>
+                        <InputLabel>Exchange</InputLabel>
+                        <Select
+                          value={exchange}
+                          onChange={handleExchangeChange}
+                          label="Exchange"
+                        >
+                          <MenuItem value="">
+                            <em>All Exchanges</em>
+                          </MenuItem>
+                          {exchanges.map((ex) => (
+                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
                   </Grid>
                 </Box>
               )}
@@ -1747,6 +1792,12 @@ const StockScreener = () => {
                       <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Price</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Change %</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Volume</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Prev Day High</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Prev Day Close</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Prev Day Open</TableCell>
+                      {showPositiveCandles && (
+                        <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Consec. Candles</TableCell>
+                      )}
                       <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Sector</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 600, py: 1.5 }}>Actions</TableCell>
                     </TableRow>
@@ -1771,17 +1822,13 @@ const StockScreener = () => {
                         </TableCell>
                         <TableCell sx={{ py: 2 }}>{stock.name || 'N/A'}</TableCell>
                         <TableCell align="right" sx={{ py: 2 }}>
-                          {(() => {
-                            // Just use the already formatted price from our processedStocks
-                            return stock.price || 'N/A';
-                          })()}
+                          {stock.price || 'N/A'}
                         </TableCell>
                         <TableCell 
                           align="right"
                           sx={{ 
                             py: 2,
                             color: (() => {
-                              // Parse change percentage to determine color
                               const changeText = stock.change_percent || '';
                               if (changeText.includes('-')) return 'error.main';
                               if (changeText.includes('+') || changeText.match(/[0-9]/)) return 'success.main';
@@ -1794,6 +1841,20 @@ const StockScreener = () => {
                         <TableCell align="right" sx={{ py: 2 }}>
                           {stock.volume || 'N/A'}
                         </TableCell>
+                        <TableCell align="right" sx={{ py: 2 }}>
+                          {stock.prev_day_high_display || formatPrice(stock.prev_day_high) || 'N/A'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 2 }}>
+                          {stock.prev_day_close_display || formatPrice(stock.prev_day_close) || 'N/A'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 2 }}>
+                          {stock.prev_day_open_display || formatPrice(stock.prev_day_open) || 'N/A'}
+                        </TableCell>
+                        {showPositiveCandles && (
+                          <TableCell align="right" sx={{ py: 2 }}>
+                            {stock.consecutive_candles || numCandles || 'N/A'}
+                          </TableCell>
+                        )}
                         <TableCell align="right" sx={{ py: 2 }}>
                           <Chip 
                             label={stock.sector || 'N/A'} 
