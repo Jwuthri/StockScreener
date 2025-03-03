@@ -82,7 +82,26 @@ const StockDetail = () => {
       try {
         // Fetch stock details
         const stockResponse = await axios.get(`${API_URL}/api/stocks/details/${symbol}`);
-        setStockData(stockResponse.data);
+        
+        // Process the stock data to ensure consistent formatting of percent_change
+        const stockData = stockResponse.data;
+        
+        // Format the percent change consistently
+        if (stockData.percent_change !== undefined && stockData.percent_change !== null) {
+          const numPct = typeof stockData.percent_change === 'number' 
+            ? stockData.percent_change 
+            : parseFloat(stockData.percent_change);
+            
+          if (!isNaN(numPct)) {
+            stockData.formatted_percent_change = `${numPct >= 0 ? '+' : ''}${numPct.toFixed(2)}%`;
+          } else {
+            stockData.formatted_percent_change = 'N/A';
+          }
+        } else {
+          stockData.formatted_percent_change = 'N/A';
+        }
+        
+        setStockData(stockData);
         
         // Fetch price history
         const historyResponse = await axios.get(`${API_URL}/api/stocks/history/${symbol}?period=1mo`);
@@ -94,7 +113,7 @@ const StockDetail = () => {
         setError('Failed to load stock data. Please try again later.');
         
         // Demo data for development
-        setStockData({
+        const demoData = {
           symbol: symbol,
           name: `${symbol} Inc.`,
           sector: 'Technology',
@@ -102,6 +121,7 @@ const StockDetail = () => {
           price: 156.78,
           change: 2.34,
           change_percent: 1.52,
+          formatted_percent_change: '+1.52%',  // Add formatted version
           market_cap: 2400000000000,
           pe_ratio: 28.6,
           dividend_yield: 0.68,
@@ -111,7 +131,9 @@ const StockDetail = () => {
           low_52week: 120.18,
           open: 154.20,
           previous_close: 154.44
-        });
+        };
+        
+        setStockData(demoData);
         
         // Generate sample price history
         const sampleHistory = generateSamplePriceHistory(30);
@@ -361,7 +383,7 @@ const StockDetail = () => {
                   ) : (
                     <KeyboardArrowDownIcon fontSize="small" sx={{ mr: 0.5 }} />
                   )}
-                  {stockData.change > 0 ? '+' : ''}{stockData.change?.toFixed(2)} ({stockData.change_percent > 0 ? '+' : ''}{stockData.change_percent?.toFixed(2)}%)
+                  {stockData.change > 0 ? '+' : ''}{stockData.change?.toFixed(2)} ({stockData.formatted_percent_change})
                 </MetricBox>
                 
                 <Typography variant="body2" color="text.secondary">

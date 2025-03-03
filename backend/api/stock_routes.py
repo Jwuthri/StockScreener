@@ -27,6 +27,7 @@ from backend.services.tradingview_service import (
     get_previous_day_data,
     get_first_five_min_candle,
     get_stocks_with_consecutive_positive_candles,
+    get_stocks_with_consecutive_negative_candles,
     get_stocks_crossing_prev_day_high
 )
 
@@ -113,13 +114,13 @@ async def get_stock_history(symbol: str, period: str = "1mo"):
     return {"symbol": symbol.upper(), "history": formatted_history}
 
 @router.get("/popular")
-async def get_popular_stocks():
+async def get_popular_stocks(limit: int = 10):
     """Get a list of popular stocks based on market cap and trading volume."""
     try:
         # Get stocks with high market cap and volume
         stocks = get_stocks_with_filters(
             min_volume=1000000,  # Min 1M volume
-            limit=10
+            limit=limit
         )
         
         # Format response
@@ -143,6 +144,7 @@ async def get_losers(limit: int = 10):
     """Get top losing stocks using TradingView criteria."""
     try:
         losers = get_top_losers(limit=limit)
+
         return {"losers": losers}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -332,14 +334,6 @@ async def get_consecutive_positive_screener(
                 except (ValueError, TypeError) as e:
                     logger.error(f"Failed to convert change_percent for {stock.get('symbol')}: {e}")
                     stock['change_percent'] = 0.0
-            
-            # # Debug full serialized version of stock to check for issues
-            # import json
-            # try:
-            #     serialized = json.dumps(stock)
-            #     logger.info(f"Serialized stock data for {stock.get('symbol')}: {serialized[:100]}...")
-            # except Exception as e:
-            #     logger.error(f"Serialization error for {stock.get('symbol')}: {e}")
                 
         logger.info(f"Returning {len(stocks)} stocks with consecutive positive candles")
         
@@ -351,6 +345,79 @@ async def get_consecutive_positive_screener(
         }
     except Exception as e:
         logger.error(f"Error screening for stocks with consecutive positive candles: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
+
+@router.get("/screener/consecutive-negative")
+async def get_consecutive_negative_screener(
+    timeframe: str = Query("5m", description="Timeframe for candles (1m, 5m, 15m, 30m, 1h, 4h, 1d)"),
+    num_candles: int = Query(3, ge=2, le=10, description="Number of consecutive negative candles required"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum number of stocks to return")
+):
+    """
+    Screen for stocks with consecutive negative candles
+    """
+    try:
+        stocks = get_stocks_with_consecutive_negative_candles(timeframe, num_candles, limit)
+        
+        # Extra validation to ensure no None/null values for numeric fields
+        for stock in stocks:
+            # Log debugging info about data types
+            logger.info(f"Stock {stock.get('symbol')} before processing: price={stock.get('price')} ({type(stock.get('price')).__name__}), change_percent={stock.get('change_percent')} ({type(stock.get('change_percent')).__name__})")
+            
+            # Ensure price is a valid float
+            if stock.get('price') is None or not isinstance(stock.get('price'), (int, float)):
+                # Try to extract price from price_display if available
+                price_display = stock.get('price_display', '')
+                if price_display and price_display.startswith('$'):
+                    try:
+                        stock['price'] = float(price_display.replace('$', '').strip())
+                        logger.info(f"Extracted price from price_display: {stock['price']} for {stock.get('symbol')}")
+                    except (ValueError, TypeError):
+                        stock['price'] = 0.0
+                else:
+                    stock['price'] = 0.0
+                logger.info(f"Changed null/invalid price to {stock['price']} for {stock.get('symbol')}")
+            else:
+                # Make sure it's a simple float, not a numpy float or other object
+                try:
+                    stock['price'] = float(stock['price'])
+                    logger.info(f"Converted price to float: {stock['price']} for {stock.get('symbol')}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert price for {stock.get('symbol')}: {e}")
+                    stock['price'] = 0.0
+                
+            # Ensure change_percent is a valid float
+            if stock.get('change_percent') is None or not isinstance(stock.get('change_percent'), (int, float)):
+                # Try to extract change_percent from change_percent_display if available
+                change_percent_display = stock.get('change_percent_display', '')
+                if change_percent_display and change_percent_display.endswith('%'):
+                    try:
+                        stock['change_percent'] = float(change_percent_display.replace('%', '').strip())
+                        logger.info(f"Extracted change_percent from change_percent_display: {stock['change_percent']} for {stock.get('symbol')}")
+                    except (ValueError, TypeError):
+                        stock['change_percent'] = 0.0
+                else:
+                    stock['change_percent'] = 0.0
+                logger.info(f"Changed null/invalid change_percent to {stock['change_percent']} for {stock.get('symbol')}")
+            else:
+                # Make sure it's a simple float, not a numpy float or other object
+                try:
+                    stock['change_percent'] = float(stock['change_percent'])
+                    logger.info(f"Converted change_percent to float: {stock['change_percent']} for {stock.get('symbol')}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert change_percent for {stock.get('symbol')}: {e}")
+                    stock['change_percent'] = 0.0
+                
+        logger.info(f"Returning {len(stocks)} stocks with consecutive negative candles")
+        
+        return {
+            "stocks": stocks,
+            "count": len(stocks),
+            "timeframe": timeframe,
+            "consecutive_candles": num_candles
+        }
+    except Exception as e:
+        logger.error(f"Error screening for stocks with consecutive negative candles: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
 
 @router.get("/screener/crossing-prev-day-high")
@@ -402,36 +469,130 @@ async def get_stocks_crossing_prev_day_high_endpoint(
                     continue
                     
                 # Skip if volume doesn't meet criteria
-                volume = sanitize_numeric_value(stock.get('volume', 0))
+                volume = sanitize_numeric_value(stock.get('volume_raw', stock.get('volume', 0)))
                 if min_volume is not None and volume < min_volume:
                     continue
                 if max_volume is not None and volume > max_volume:
                     continue
                     
                 # Skip if sector doesn't match
-                if sector is not None and stock.get('sector', '').lower() != sector.lower():
+                if sector and stock.get('sector', '').lower() != sector.lower():
                     continue
                     
                 # Skip if industry doesn't match
-                if industry is not None and stock.get('industry', '').lower() != industry.lower():
+                if industry and stock.get('industry', '').lower() != industry.lower():
                     continue
                     
                 # Skip if exchange doesn't match
-                if exchange is not None and stock.get('exchange', '').lower() != exchange.lower():
+                if exchange and stock.get('exchange', '').lower() != exchange.lower():
                     continue
                     
-                # If it passes all filters, add to the filtered list
                 filtered_stocks.append(stock)
-            except (ValueError, TypeError) as e:
-                # Log issues with individual stocks but don't fail the entire request
-                logger.warning(f"Error processing stock data: {e} - Stock data: {stock}")
+            except Exception as e:
+                logger.warning(f"Error filtering stock {stock.get('symbol')}: {str(e)}")
                 continue
-            
-        return {
-            "stocks": filtered_stocks,
-            "count": len(filtered_stocks),
-            "description": "Stocks crossing above previous day high with applied filters"
-        }
+                
+        return {"stocks": filtered_stocks[:limit]}
     except Exception as e:
-        logger.error(f"Error getting stocks crossing above previous day high: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching stocks: {str(e)}") 
+        logger.error(f"Error screening for stocks crossing previous day high: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
+
+@router.get("/screener/crossing-prev-day-low")
+async def get_stocks_crossing_prev_day_low_endpoint(
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of stocks to return"),
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    industry: Optional[str] = None,
+    exchange: Optional[str] = None,
+    date: Optional[str] = None
+):
+    """
+    Get stocks from top losers that have their current price crossing below the previous day low.
+    Includes filtering options similar to the advanced stock filter.
+    """
+    try:
+        # Helper function to sanitize numeric values that might contain commas
+        def sanitize_numeric_value(value):
+            if isinstance(value, str):
+                # Remove commas and other non-numeric chars (except decimal point)
+                cleaned_value = ''.join(c for c in value if c.isdigit() or c == '.')
+                return float(cleaned_value) if '.' in cleaned_value else int(cleaned_value)
+            return value
+            
+        # Get top losers as a starting point
+        from backend.services.stock_service import get_top_losers
+        losers = get_top_losers(limit=limit*2)  # Get more losers to filter from
+        
+        # Filter for stocks below previous day low
+        filtered_stocks = []
+        for stock in losers:
+            try:
+                # Get previous day data for this stock
+                from backend.services.tradingview_service import get_previous_day_data
+                prev_day_data = get_previous_day_data(stock['symbol'])
+                
+                if not prev_day_data or 'low' not in prev_day_data:
+                    continue
+                    
+                # Get current price
+                current_price = sanitize_numeric_value(stock.get('price', 0))
+                prev_day_low = sanitize_numeric_value(prev_day_data['low'])
+                
+                # Check if current price is below previous day low
+                if current_price > prev_day_low:
+                    continue
+                    
+                # Add previous day low to the stock data
+                stock['prev_day_low'] = prev_day_low
+                
+                # Skip if price doesn't meet criteria
+                if min_price is not None and current_price < min_price:
+                    continue
+                if max_price is not None and current_price > max_price:
+                    continue
+                    
+                # Skip if change percent doesn't meet criteria
+                change_percent = sanitize_numeric_value(stock.get('percent_change', '0').replace('%', ''))
+                if min_change_percent is not None and change_percent < min_change_percent:
+                    continue
+                if max_change_percent is not None and change_percent > max_change_percent:
+                    continue
+                    
+                # Skip if volume doesn't meet criteria
+                volume = sanitize_numeric_value(stock.get('volume_raw', stock.get('volume', 0)))
+                if min_volume is not None and volume < min_volume:
+                    continue
+                if max_volume is not None and volume > max_volume:
+                    continue
+                    
+                # Skip if sector doesn't match
+                if sector and stock.get('sector', '').lower() != sector.lower():
+                    continue
+                    
+                # Skip if industry doesn't match
+                if industry and stock.get('industry', '').lower() != industry.lower():
+                    continue
+                    
+                # Skip if exchange doesn't match
+                if exchange and stock.get('exchange', '').lower() != exchange.lower():
+                    continue
+                    
+                filtered_stocks.append(stock)
+                
+                # Break if we have enough stocks
+                if len(filtered_stocks) >= limit:
+                    break
+                    
+            except Exception as e:
+                logger.warning(f"Error processing stock {stock.get('symbol')}: {str(e)}")
+                continue
+                
+        return {"stocks": filtered_stocks[:limit]}
+    except Exception as e:
+        logger.error(f"Error screening for stocks crossing previous day low: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}") 

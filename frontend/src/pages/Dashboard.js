@@ -5,7 +5,6 @@ import {
   ListItemAvatar, Avatar, CircularProgress, Button,
   Tabs, Tab, Alert, Container, Chip
 } from '@mui/material';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -29,11 +28,11 @@ const Dashboard = () => {
   const [topGainers, setTopGainers] = useState([]);
   const [topLosers, setTopLosers] = useState([]);
   const [mostActive, setMostActive] = useState([]);
-  const [popularStocks, setPopularStocks] = useState([]);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('gainers');
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [usingDemoData, setUsingDemoData] = useState(false);
+  const [stockLimit, setStockLimit] = useState(10);
   
   // Parse the filter from URL query parameters
   const urlParams = new URLSearchParams(location.search);
@@ -44,7 +43,7 @@ const Dashboard = () => {
     const filterParam = params.get('filter');
     
     if (filterParam) {
-      if (['popular', 'gainers', 'losers', 'most-active'].includes(filterParam)) {
+      if (['gainers', 'losers', 'most-active'].includes(filterParam)) {
         setActiveTab(filterParam);
       }
     } else {
@@ -57,7 +56,7 @@ const Dashboard = () => {
   
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [stockLimit]);
   
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -65,14 +64,55 @@ const Dashboard = () => {
     
     try {
       const [gainersRes, losersRes, activeRes] = await Promise.all([
-        axios.get(`${API_URL}/api/stocks/gainers`),
-        axios.get(`${API_URL}/api/stocks/losers`),
-        axios.get(`${API_URL}/api/stocks/most-active`)
+        axios.get(`${API_URL}/api/stocks/gainers?limit=${stockLimit}`),
+        axios.get(`${API_URL}/api/stocks/losers?limit=${stockLimit}`),
+        axios.get(`${API_URL}/api/stocks/most-active?limit=${stockLimit}`)
       ]);
       
-      setTopGainers(gainersRes.data.stocks || []);
-      setTopLosers(losersRes.data.stocks || []);
-      setMostActive(activeRes.data.stocks || []);
+      // Process each dataset to ensure consistent formatting
+      const processStockData = (stocks) => {
+        if (!stocks || !Array.isArray(stocks)) return [];
+        
+        return stocks.map(stock => {
+          // Format values properly for display
+          return {
+            ...stock,
+            price: stock.price_display || 
+                  (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` : 
+                   typeof stock.price === 'string' ? stock.price : 'N/A'),
+            
+            // Handle percent change consistently
+            change_percent: (() => {
+              const pct = stock.percent_change;
+              if (pct === null || pct === undefined) return 'N/A';
+              
+              // If it's already a formatted string with % (from backend)
+              if (typeof pct === 'string' && pct.includes('%')) {
+                return pct; // Return as is, it's already formatted
+              }
+              
+              // Otherwise parse and format
+              const numPct = typeof pct === 'number' ? pct : parseFloat(pct);
+              if (isNaN(numPct)) return 'N/A';
+              return `${numPct >= 0 ? '+' : ''}${numPct.toFixed(2)}%`;
+            })(),
+            
+            volume: stock.volume_display || 
+                   (typeof stock.volume === 'number' ? 
+                    stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
+                    stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
+                    stock.volume.toString() : stock.volume || 'N/A')
+          };
+        });
+      };
+      
+      const processedGainers = processStockData(gainersRes.data.gainers || []);
+      const processedLosers = processStockData(losersRes.data.losers || []);
+      const processedActive = processStockData(activeRes.data.most_active || []);
+      
+      setTopGainers(processedGainers);
+      setTopLosers(processedLosers);
+      setMostActive(processedActive);
       
       setLastUpdated(new Date());
       setUsingDemoData(
@@ -120,9 +160,7 @@ const Dashboard = () => {
     } else if (newValue === 'losers') {
       navigate('/?filter=losers');
     } else if (newValue === 'most-active') {
-      navigate('/?filter=mostActive');
-    } else {
-      navigate('/');
+      navigate('/?filter=most-active');
     }
   };
   
@@ -171,17 +209,29 @@ const Dashboard = () => {
             />
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                ${parseFloat(stock.price || 0).toFixed(2)}
+                {stock.price}
               </Typography>
               <Typography 
                 variant="body2" 
-                color={parseFloat(stock.percent_change || 0) >= 0 ? 'success.main' : 'error.main'}
+                color={(() => {
+                  // Handle both formatted strings and numeric values
+                  const pctStr = stock.change_percent;
+                  if (pctStr === 'N/A') return 'text.secondary';
+                  
+                  // If it's a string with a % sign
+                  if (typeof pctStr === 'string') {
+                    // Remove any + sign and % sign for parsing
+                    const cleanedStr = pctStr.replace('+', '').replace('%', '');
+                    return parseFloat(cleanedStr) >= 0 ? 'success.main' : 'error.main';
+                  }
+                  
+                  return 'text.secondary';
+                })()}
               >
-                {parseFloat(stock.percent_change || 0) >= 0 ? '+' : ''}
-                {parseFloat(stock.percent_change || 0).toFixed(2)}%
+                {stock.change_percent}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Vol: {stock.volume || 'N/A'}
+                Vol: {stock.volume}
               </Typography>
             </Box>
           </ListItem>
@@ -194,7 +244,7 @@ const Dashboard = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Grid container spacing={3}>
         <Grid item xs={12}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Tabs 
               value={activeTab} 
               onChange={handleTabChange} 
@@ -202,12 +252,6 @@ const Dashboard = () => {
               variant="scrollable"
               scrollButtons="auto"
             >
-              <Tab 
-                icon={<TrendingUpIcon fontSize="small" />} 
-                iconPosition="start" 
-                label="Popular" 
-                value="popular" 
-              />
               <Tab 
                 icon={<ArrowUpwardIcon fontSize="small" />} 
                 iconPosition="start" 
@@ -227,25 +271,39 @@ const Dashboard = () => {
                 value="most-active" 
               />
             </Tabs>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="body2" sx={{ mr: 1 }}>Show:</Typography>
+                <select 
+                  value={stockLimit}
+                  onChange={(e) => {
+                    setStockLimit(Number(e.target.value));
+                  }}
+                  style={{ 
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc'
+                  }}
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </Box>
+              <Button 
+                startIcon={<RefreshIcon />} 
+                size="small" 
+                onClick={refreshData}
+                variant="outlined"
+              >
+                Refresh
+              </Button>
+            </Box>
           </Box>
         </Grid>
         
         <Grid item xs={12}>
-          {activeTab === 'popular' && (
-            <Paper elevation={1} sx={{ p: 0 }}>
-              <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" fontWeight="medium">Popular Stocks</Typography>
-                <Chip 
-                  label={`${popularStocks.length} stocks`} 
-                  size="small" 
-                  color="info" 
-                  sx={{ fontWeight: 500 }}
-                />
-              </Box>
-              {renderStockList(popularStocks, loading, error)}
-            </Paper>
-          )}
-          
           {activeTab === 'gainers' && (
             <Paper elevation={1} sx={{ p: 0 }}>
               <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -195,6 +195,7 @@ def get_top_gainers(limit: int = 10) -> List[Dict[str, Any]]:
                     'volume': volume_display,
                     'sector': row.get('sector', 'N/A')
                 })
+                logger.info(f"Stock {row.get('name')} - percent_change: {change_pct} (type: {type(change_pct)})")
             except Exception as e:
                 logger.warning(f"Error processing row {row}: {str(e)}")
                 continue
@@ -600,6 +601,190 @@ def get_stocks_with_consecutive_positive_candles(timeframe: str = "1d", num_cand
         
     except Exception as e:
         logger.error(f"Error fetching stocks with consecutive positive candles: {str(e)}")
+        return []
+
+def get_stocks_with_consecutive_negative_candles(timeframe: str = "1d", num_candles: int = 3, limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Get stocks with consecutive negative candles.
+    """
+    try:
+        logger.info(f"Screening for stocks with {num_candles} consecutive negative candles on {timeframe} timeframe")
+        
+        # Get cookies for TradingView
+        tv_cookies = get_cookies_from_browser()
+        
+        # Get initial list of stocks to check
+        count, stock_df = (Query()
+            .select('name', 'close', 'change_abs', 'change', 'volume', 'description', 'exchange', 'market_cap_basic')
+            .where(col('volume') > 250_000)  # Higher volume filter for more reliable results
+            .where(col('exchange').isin(['NASDAQ', 'NYSE']))
+            .limit(50)  # Check more stocks for better chance of finding consecutive candles
+            .get_scanner_data(cookies=tv_cookies))
+            
+        if stock_df.empty:
+            logger.warning("No stocks found for screening")
+            return []
+            
+        # List to store stocks with consecutive negative candles
+        negative_candle_stocks = []
+        
+        # Check each stock for consecutive negative candles
+        for _, stock in stock_df.iterrows():
+            symbol = stock.get('name')
+            
+            # Skip stocks with missing names
+            if not symbol:
+                logger.warning("Found stock with missing symbol, skipping")
+                continue
+                
+            try:
+                # Get historical chart data for the stock
+                chart_data = get_stock_chart_data(symbol, timeframe)
+                
+                # Skip if no chart data is available
+                if not chart_data or 'data' not in chart_data or not chart_data['data']:
+                    logger.warning(f"No chart data available for {symbol}, skipping")
+                    continue
+                
+                # Get candle data (most recent candles come last)
+                candles = chart_data['data']
+                
+                # Count consecutive negative candles starting from the most recent
+                consecutive_negative = 0
+                
+                # We need at least num_candles+1 data points to check for num_candles consecutive negative candles
+                # (comparing current with previous)
+                if len(candles) <= num_candles:
+                    logger.warning(f"Not enough candles for {symbol} to check for {num_candles} consecutive negative candles")
+                    continue
+                
+                # Start from the most recent candle (last in the list) and go backwards
+                for i in range(len(candles)-1, 0, -1):
+                    current_close = candles[i]['price']  # Close price (assuming OHLC format)
+                    previous_close = candles[i-1]['price']  # Previous close
+                    
+                    if current_close < previous_close:  # Check for negative candle (current < previous)
+                        consecutive_negative += 1
+                    else:
+                        break  # Break on first non-negative candle
+                    
+                    # Stop if we've found enough consecutive negative candles
+                    if consecutive_negative >= num_candles:
+                        break
+                
+                # If we have enough consecutive negative candles, add to our results
+                if consecutive_negative >= num_candles:
+                    # Get detailed stock information
+                    stock_details = get_stock_details_tv(symbol)
+                    
+                    if stock_details:
+                        try:
+                            # Format and add relevant information
+                            # Make sure price is a number and never N/A 
+                            price = stock_details.get("price", 0)
+                            if price is None or pd.isna(price):
+                                # Use the most recent candle's price as fallback if available
+                                if candles and len(candles) > 0:
+                                    price = candles[-1].get('price', 0)
+                                else:
+                                    price = 0
+                            
+                            # Explicitly force conversion to float
+                            try:
+                                price = float(price)
+                            except (ValueError, TypeError):
+                                price = 0.0
+                                logger.warning(f"Failed to convert price to float for {symbol}, using 0")
+                            
+                            # Make sure percent_change is a number and never N/A
+                            percent_change = stock_details.get("percent_change", 0)
+                            if percent_change is None or pd.isna(percent_change):
+                                # Calculate percent change from candles if available
+                                if candles and len(candles) > 1:
+                                    last_price = candles[-1].get('price', 0)
+                                    prev_price = candles[-2].get('price', 0)
+                                    if prev_price and prev_price > 0:
+                                        percent_change = ((last_price - prev_price) / prev_price) * 100
+                                else:
+                                    percent_change = 0
+                            
+                            # Explicitly force conversion to float
+                            try:
+                                percent_change = float(percent_change)
+                            except (ValueError, TypeError):
+                                percent_change = 0.0
+                                logger.warning(f"Failed to convert percent_change to float for {symbol}, using 0")
+                            
+                            # For debugging only
+                            logger.info(f"Stock: {symbol}, Price: {price} (type: {type(price)}), Change%: {percent_change} (type: {type(percent_change)})")
+                            
+                            volume_num = stock_details.get("volume")
+                            if isinstance(volume_num, str):
+                                if 'M' in volume_num:
+                                    volume_num = float(volume_num.replace('M', '')) * 1000000
+                                elif 'K' in volume_num:
+                                    volume_num = float(volume_num.replace('K', '')) * 1000
+                                else:
+                                    volume_num = float(volume_num)
+ 
+                            # Instead of trying to be clever with formatting, just pass the plain numeric values
+                            # The frontend expects numbers that it can format itself
+                            stock_data = {
+                                "symbol": symbol,
+                                "name": stock_details.get("name", symbol),  # Use symbol as fallback for name
+                                "price": price,  # Already ensured to be a float
+                                'price_display': f"${price:.2f}",  # Formatted for display
+                                'change_percent_display': f"{percent_change:.2f}%",
+                                "change_percent": percent_change,  # Already ensured to be a float
+                                "volume": volume_num,  # Keep volume as is since it's already handled correctly
+                                "volume_display": stock_details.get("volume"),  # Formatted for display
+                                "sector": stock_details.get("sector", "Unknown"),
+                                "industry": stock_details.get("industry", "Unknown"),
+                                "exchange": stock.get("exchange", "Unknown"),
+                                "consecutive_negative_candles": consecutive_negative,
+                                "description": stock_details.get("description", ""),
+                            }
+                            
+                            # Final check to ensure numeric fields are not None or NaN
+                            for field in ["price", "change_percent"]:
+                                if stock_data[field] is None or (hasattr(stock_data[field], 'is_integer') and pd.isna(stock_data[field])):
+                                    logger.warning(f"Field {field} is None or NaN for {symbol}, setting to 0")
+                                    stock_data[field] = 0.0
+                                    
+                            # Print the final object being added
+                            logger.info(f"Adding stock to results: {json.dumps(stock_data, default=str)}")
+                            
+                            negative_candle_stocks.append(stock_data)
+                        except Exception as e:
+                            logger.error(f"Error processing stock details for {symbol}: {str(e)}")
+                            # Add a minimal record with the symbol
+                            negative_candle_stocks.append({
+                                "symbol": symbol,
+                                "name": symbol,
+                                "price": 0.0,
+                                "price_display": "0.00",
+                                "change_percent": 0.0,
+                                "change_percent_display": "0.00%",
+                                "volume": "0",
+                                "volume_display": "0",
+                                "sector": "Unknown",
+                                "industry": "Unknown",
+                                "exchange": "Unknown",
+                                "consecutive_negative_candles": consecutive_negative,
+                                "description": symbol,
+                            })
+                
+            except Exception as e:
+                logger.error(f"Error checking consecutive candles for {symbol}: {str(e)}")
+                continue
+        
+        # Sort by number of consecutive negative candles (descending) and then by change percentage (ascending)
+        negative_candle_stocks.sort(key=lambda x: (x["consecutive_negative_candles"], -x["change_percent"]), reverse=True)
+        # Return the top 'limit' stocks
+        return negative_candle_stocks[:limit]
+        
+    except Exception as e:
+        logger.error(f"Error fetching stocks with consecutive negative candles: {str(e)}")
         return []
 
 # Demo data functions for fallback scenarios
