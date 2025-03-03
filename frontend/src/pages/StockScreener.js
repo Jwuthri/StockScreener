@@ -1043,7 +1043,7 @@ const StockScreener = () => {
           {showAdvancedInPC && (
             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks with consecutive positive candles:
+                Narrow down stocks:
               </Typography>
               
               <Tabs
@@ -1227,7 +1227,7 @@ const StockScreener = () => {
           {showAdvancedInPDHC && (
             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks crossing previous day high:
+                Narrow down stocks:
               </Typography>
               
               <Tabs
