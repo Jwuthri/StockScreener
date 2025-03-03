@@ -161,3 +161,4 @@ logs/
 .cache/
 .parcel-cache/
 .webpack/
+backend/services/__pycache__/tradingview_service.cpython-310.pyc
