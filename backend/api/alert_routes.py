@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, Body
+from fastapi import APIRouter, HTTPException, Depends, Query, Body, status
 from backend.services.alert_service import (
     create_alert, 
     get_alerts_for_user, 
@@ -10,27 +10,32 @@ from backend.services.alert_service import (
     VOLUME_ABOVE, 
     PERCENT_CHANGE
 )
-from pydantic import BaseModel, EmailStr, Field
+from backend.api.auth_routes import get_current_user
+from backend.models.database import Alert, User
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 import rookiepy
-
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 class AlertCreate(BaseModel):
     stock_symbol: str
-    user_email: EmailStr
     alert_type: str
     threshold_value: float
 
-class AlertUpdate(BaseModel):
-    is_active: Optional[bool] = None
-    threshold_value: Optional[float] = None
+class AlertResponse(BaseModel):
+    id: int
+    stock_symbol: str
+    stock_name: str
+    alert_type: str
+    threshold_value: float
+    is_active: bool
+    created_at: str
 
-@router.post("/create")
-async def add_alert(alert_data: AlertCreate):
+@router.post("/create", response_model=AlertResponse)
+async def add_alert(alert_data: AlertCreate, current_user: User = Depends(get_current_user)):
     """Create a new stock alert."""
     # Validate alert type
     valid_alert_types = [PRICE_ABOVE, PRICE_BELOW, VOLUME_ABOVE, PERCENT_CHANGE]
@@ -42,7 +47,7 @@ async def add_alert(alert_data: AlertCreate):
         
     result = create_alert(
         alert_data.stock_symbol,
-        alert_data.user_email,
+        current_user,  # Pass user object instead of email
         alert_data.alert_type,
         alert_data.threshold_value
     )
@@ -52,35 +57,58 @@ async def add_alert(alert_data: AlertCreate):
         
     return result
 
-@router.get("/user/{email}")
-async def get_user_alerts(email: EmailStr):
-    """Get all alerts for a specific user."""
-    alerts = get_alerts_for_user(email)
-    return {"alerts": alerts}
+@router.get("/user/alerts", response_model=List[AlertResponse])
+async def get_user_alerts(current_user: User = Depends(get_current_user)):
+    """Get all alerts for the current user."""
+    alerts = get_alerts_for_user(current_user)  # Pass user object instead of email
+    return alerts
 
 @router.put("/{alert_id}")
-async def modify_alert(alert_id: int, alert_data: AlertUpdate):
-    """Update an existing alert."""
-    result = update_alert(
-        alert_id,
-        alert_data.is_active,
-        alert_data.threshold_value
-    )
+async def update_alert_status(
+    alert_id: int,
+    is_active: bool = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Update an alert's active status."""
+    try:
+        alert = Alert.get(
+            (Alert.id == alert_id) & 
+            (Alert.user == current_user)
+        )
+    except Alert.DoesNotExist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
     
+    result = update_alert(alert_id, is_active=is_active)
     if not result:
-        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
-        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update alert"
+        )
     return result
 
 @router.delete("/{alert_id}")
-async def remove_alert(alert_id: int):
+async def remove_alert(alert_id: int, current_user: User = Depends(get_current_user)):
     """Delete an alert."""
-    success = delete_alert(alert_id)
+    try:
+        alert = Alert.get(
+            (Alert.id == alert_id) & 
+            (Alert.user == current_user)
+        )
+    except Alert.DoesNotExist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
     
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
-        
-    return {"message": f"Alert {alert_id} deleted successfully"}
+    if delete_alert(alert_id):
+        return {"message": "Alert deleted successfully"}
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Failed to delete alert"
+    )
 
 @router.get("/triggered")
 async def get_triggered_alerts(limit: int = Query(50, ge=1, le=100)):

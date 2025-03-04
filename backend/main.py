@@ -9,6 +9,7 @@ if os.path.basename(os.getcwd()) == "backend":
     
 from api.stock_routes import router as stock_router
 from backend.api.alert_routes import router as alert_router
+from backend.api.auth_routes import router as auth_router
 from backend.models.database import initialize_db
 from backend.services.alert_service import alert_manager
 import asyncio
@@ -103,7 +104,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, replace with your frontend URL
+    allow_origins=["http://localhost:3000"],  # Add your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,6 +117,7 @@ active_connections = []
 previous_crossing_stocks = set()
 
 # Include routers
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(stock_router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(alert_router, prefix="/api/alerts", tags=["alerts"])
 

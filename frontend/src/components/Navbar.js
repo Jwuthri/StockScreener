@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -19,6 +19,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate } from 'react-router-dom';
+import { logout, getCurrentUser } from '../services/auth';
 
 // Custom styled components
 const Search = styled('div')(({ theme }) => ({
@@ -76,6 +77,7 @@ const StyledToolbar = styled(Toolbar)(({ theme }) => ({
 const LogoSection = styled('div')({
   display: 'flex',
   alignItems: 'center',
+  flex: 1,
 });
 
 const NavbarActions = styled('div')(({ theme }) => ({
@@ -88,7 +90,8 @@ const BrandText = styled(Typography)(({ theme }) => ({
   fontWeight: 700,
   fontSize: '1.25rem',
   letterSpacing: '-0.03em',
-  cursor: 'pointer'
+  cursor: 'pointer',
+  minWidth: 'max-content',
 }));
 
 const Navbar = () => {
@@ -96,6 +99,17 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [user, setUser] = useState(null);
+  
+  useEffect(() => {
+    const fetchUser = async () => {
+      const userData = await getCurrentUser();
+      if (userData) {
+        setUser(userData);
+      }
+    };
+    fetchUser();
+  }, []);
   
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -111,38 +125,34 @@ const Navbar = () => {
       setSearchQuery('');
     }
   };
-  
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
-    <AppBar 
-      position="fixed" 
-      elevation={0}
-      sx={{ 
-        backgroundColor: 'white',
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        color: theme.palette.text.primary,
-      }}
-    >
+    <AppBar position="fixed" color="inherit" elevation={1}>
       <StyledToolbar>
         <LogoSection>
-          <BrandText 
-            onClick={() => navigate('/')}
-          >
-            InvestGuru
+          <BrandText onClick={() => navigate('/')}>
+            Stock Screener
           </BrandText>
+          
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+            <Search>
+              <SearchIconWrapper>
+                <SearchIcon />
+              </SearchIconWrapper>
+              <StyledInputBase
+                placeholder="Search stocks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleSearchSubmit}
+              />
+            </Search>
+          </Box>
         </LogoSection>
-        
-        <Search>
-          <SearchIconWrapper>
-            <SearchIcon fontSize="small" />
-          </SearchIconWrapper>
-          <StyledInputBase
-            placeholder="Search symbols"
-            inputProps={{ 'aria-label': 'search' }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleSearchSubmit}
-          />
-        </Search>
         
         <NavbarActions>
           <Box 
@@ -193,7 +203,7 @@ const Navbar = () => {
                 color: theme.palette.text.primary
               }}
             >
-              <AccountCircleIcon fontSize="small" />
+              {user?.username?.[0]?.toUpperCase() || <AccountCircleIcon fontSize="small" />}
             </Avatar>
           </IconButton>
         </NavbarActions>
@@ -223,11 +233,21 @@ const Navbar = () => {
             },
           }}
         >
-          <MenuItem onClick={handleMenuClose}>Portfolio</MenuItem>
-          <MenuItem onClick={handleMenuClose}>Account</MenuItem>
+          {user && (
+            <Box sx={{ px: 2, py: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                {user.username}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {user.email}
+              </Typography>
+            </Box>
+          )}
           <Divider sx={{ my: 1 }} />
-          <MenuItem onClick={handleMenuClose}>Settings</MenuItem>
-          <MenuItem onClick={handleMenuClose}>Sign Out</MenuItem>
+          <MenuItem onClick={() => { handleMenuClose(); navigate('/alerts'); }}>My Alerts</MenuItem>
+          <MenuItem onClick={() => { handleMenuClose(); navigate('/settings'); }}>Settings</MenuItem>
+          <Divider sx={{ my: 1 }} />
+          <MenuItem onClick={handleLogout}>Sign Out</MenuItem>
         </Menu>
       </StyledToolbar>
     </AppBar>

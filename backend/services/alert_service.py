@@ -1,4 +1,4 @@
-from backend.models.database import Alert, Stock, db
+from backend.models.database import Alert, Stock, User, db
 from backend.services.stock_service import get_current_price
 import logging
 from datetime import datetime
@@ -98,7 +98,7 @@ class AlertManager:
                 'alert_type': alert.alert_type,
                 'threshold_value': alert.threshold_value,
                 'current_value': current_value_native,
-                'user_email': alert.user_email,
+                'user_email': alert.user.email,
                 'triggered_at': datetime.now()
             }
             self.triggered_alerts.append(alert_data)
@@ -122,7 +122,7 @@ class AlertManager:
 # Global alert manager instance
 alert_manager = AlertManager()
 
-def create_alert(stock_symbol, user_email, alert_type, threshold_value):
+def create_alert(stock_symbol: str, user: User, alert_type: str, threshold_value: float):
     """Create a new stock alert."""
     try:
         with db.atomic():
@@ -133,7 +133,7 @@ def create_alert(stock_symbol, user_email, alert_type, threshold_value):
             
             alert = Alert.create(
                 stock=stock,
-                user_email=user_email,
+                user=user,
                 alert_type=alert_type,
                 threshold_value=float(threshold_value),
                 is_active=True,
@@ -146,8 +146,8 @@ def create_alert(stock_symbol, user_email, alert_type, threshold_value):
                 'stock_name': stock.name,
                 'alert_type': alert.alert_type,
                 'threshold_value': convert_numpy_types(alert.threshold_value),
-                'user_email': alert.user_email,
-                'created_at': alert.created_at
+                'is_active': alert.is_active,
+                'created_at': alert.created_at.isoformat()
             }
     except Stock.DoesNotExist:
         logger.error(f"Stock {stock_symbol} not found")
@@ -156,11 +156,10 @@ def create_alert(stock_symbol, user_email, alert_type, threshold_value):
         logger.error(f"Error creating alert: {str(e)}")
         return None
 
-def get_alerts_for_user(user_email):
+def get_alerts_for_user(user: User):
     """Get all alerts for a specific user."""
     try:
-        alerts = Alert.select().where(Alert.user_email == user_email)
-        logger.info(f"Alerts for user {user_email}: {alerts}")
+        alerts = Alert.select().where(Alert.user == user)
         return [
             {
                 'id': alert.id,
@@ -169,16 +168,15 @@ def get_alerts_for_user(user_email):
                 'alert_type': alert.alert_type,
                 'threshold_value': convert_numpy_types(alert.threshold_value),
                 'is_active': alert.is_active,
-                'last_triggered': alert.last_triggered,
-                'created_at': alert.created_at
+                'created_at': alert.created_at.isoformat()
             }
             for alert in alerts
         ]
     except Exception as e:
-        logger.error(f"Error getting alerts for user {user_email}: {str(e)}")
+        logger.error(f"Error getting alerts for user {user.username}: {str(e)}")
         return []
 
-def update_alert(alert_id, is_active=None, threshold_value=None):
+def update_alert(alert_id: int, is_active: bool = None, threshold_value: float = None):
     """Update an existing alert."""
     try:
         with db.atomic():
@@ -201,8 +199,7 @@ def update_alert(alert_id, is_active=None, threshold_value=None):
                 'alert_type': alert.alert_type,
                 'threshold_value': convert_numpy_types(alert.threshold_value),
                 'is_active': alert.is_active,
-                'last_triggered': alert.last_triggered,
-                'created_at': alert.created_at
+                'created_at': alert.created_at.isoformat()
             }
     except Alert.DoesNotExist:
         logger.error(f"Alert {alert_id} not found")
@@ -211,7 +208,7 @@ def update_alert(alert_id, is_active=None, threshold_value=None):
         logger.error(f"Error updating alert {alert_id}: {str(e)}")
         return None
 
-def delete_alert(alert_id):
+def delete_alert(alert_id: int) -> bool:
     """Delete an alert."""
     try:
         with db.atomic():

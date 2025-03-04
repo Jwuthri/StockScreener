@@ -4,10 +4,10 @@ import {
   TableBody, TableCell, TableContainer, TableHead, 
   TableRow, CircularProgress, Grid, FormControl,
   InputLabel, Select, MenuItem, Chip, Slider, 
-  ToggleButtonGroup, ToggleButton, FormControlLabel,
-  Switch, Divider, Alert, Container, Accordion,
+  ToggleButtonGroup, ToggleButton,
+  Switch, Alert, Accordion,
   AccordionSummary, AccordionDetails, Tabs, Tab,
-  Checkbox, InputAdornment, Autocomplete, IconButton,
+  IconButton,
   Tooltip
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
@@ -17,15 +17,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import BarChartIcon from '@mui/icons-material/BarChart';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import ClearIcon from '@mui/icons-material/Clear';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { debounce } from 'lodash';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import LaunchIcon from '@mui/icons-material/Launch';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
@@ -46,24 +40,18 @@ const StockScreener = () => {
   // Advanced filter states
   const [priceRange, setPriceRange] = useState([0, 5000]);
   const [changeRange, setChangeRange] = useState([-500, 500]);
-  const [minVolume, setMinVolume] = useState(100000);
   const [showPositiveCandles, setShowPositiveCandles] = useState(false);
   const [showPrevDayHighCross, setShowPrevDayHighCross] = useState(true);
   const [showNegativeCandles, setShowNegativeCandles] = useState(false);
   const [showPrevDayLowCross, setShowPrevDayLowCross] = useState(false);
   const [timeframe, setTimeframe] = useState("5m");
   const [numCandles, setNumCandles] = useState(3);
-  const [positiveCandleStocks, setPositiveCandleStocks] = useState([]);
-  
-  // Add date state
-  const [selectedDate, setSelectedDate] = useState(null);
   
   // Enhanced filter states
   const [selectedFilterTab, setSelectedFilterTab] = useState(0);
   
   // Enhanced volume filter options
   const [volumeRange, setVolumeRange] = useState([100000, 10000000]);
-  const [maxVolumeOption, setMaxVolumeOption] = useState(10000000);
   
   // Enhanced price filter options
   const [priceFilterType, setPriceFilterType] = useState("range"); // "range" or "above" or "below"
@@ -81,10 +69,7 @@ const StockScreener = () => {
   
   // Exchange filter
   const [exchange, setExchange] = useState('');
-  const [exchanges, setExchanges] = useState(['NYSE', 'NASDAQ', 'AMEX', 'OTC']);
-  
-  // Add new state for previous day high cross option in advanced filters
-  const [includePrevDayHighCross, setIncludePrevDayHighCross] = useState(false);
+  const [exchanges] = useState(['NYSE', 'NASDAQ', 'AMEX', 'OTC']);
   
   // Add state to control advanced filters in Previous Day High Cross screener
   const [showAdvancedInPDHC, setShowAdvancedInPDHC] = useState(false);
@@ -93,11 +78,7 @@ const StockScreener = () => {
   const [showAdvancedInPC, setShowAdvancedInPC] = useState(false);
   
   // Add new state variables for search UI
-  const [searchFocused, setSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [topSymbols, setTopSymbols] = useState(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']);
   
   // Add a new state variable for result limit
   const [maxResults, setMaxResults] = useState(15);
@@ -131,39 +112,6 @@ const StockScreener = () => {
     
     fetchPopularStocks();
   }, []);
-  
-  // Fetch search suggestions based on input
-  const fetchSearchSuggestions = debounce(async (query) => {
-    if (!query || query.length < 2) {
-      setSearchSuggestions([]);
-      return;
-    }
-    
-    try {
-      setIsSearching(true);
-      const response = await axios.get(`${API_URL}/api/stocks/search?query=${query}`);
-      if (response.data && Array.isArray(response.data)) {
-        setSearchSuggestions(response.data.slice(0, 10));
-      }
-    } catch (error) {
-      console.error('Error fetching search suggestions:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  }, 300);
-  
-  // Handle search input change
-  const handleSearchChange = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    fetchSearchSuggestions(query);
-  };
-  
-  // Clear search
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchSuggestions([]);
-  };
   
   // Handle search submission
   const handleSearchSubmit = async (symbol = searchQuery) => {
@@ -200,16 +148,6 @@ const StockScreener = () => {
     }
   };
   
-  // Helper function to debounce API calls
-  function debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-      const context = this;
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(context, args), wait);
-    };
-  }
-  
   // Load recent searches from localStorage on mount
   useEffect(() => {
     const savedSearches = localStorage.getItem('recentStockSearches');
@@ -227,12 +165,6 @@ const StockScreener = () => {
     return handlePrevDayHighCrossSearch();
   };
   
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSearchSubmit();
-    }
-  };
-  
   const handleSectorChange = (e) => {
     setSector(e.target.value);
   };
@@ -244,14 +176,6 @@ const StockScreener = () => {
   const handleChangeRangeChange = (event, newValue) => {
     setChangeRange(newValue);
   };
-  
-  const handleVolumeChange = (event) => {
-    setMinVolume(event.target.value === '' ? 0 : Number(event.target.value));
-  };
-  
-  const filteredStocks = sector && !showPositiveCandles
-    ? stocks.filter(stock => stock.sector === sector)
-    : stocks;
   
   const navigateToStockDetails = (symbol) => {
     navigate(`/stock/${symbol}`);
@@ -401,11 +325,9 @@ const StockScreener = () => {
         });
         
         console.log("Processed stocks:", processedStocks);
-        setPositiveCandleStocks(processedStocks);
         setStocks(processedStocks);
       } else {
         console.log("No stocks found in response");
-        setPositiveCandleStocks([]);
         setStocks([]);
         setError('No stocks found with consecutive positive candles. Try adjusting your parameters.');
       }
@@ -415,7 +337,6 @@ const StockScreener = () => {
     } catch (error) {
       console.error('Error finding stocks with consecutive positive candles:', error);
       setError('Error fetching stocks with consecutive positive candles.');
-      setPositiveCandleStocks([]);
       setStocks([]);
       setLoading(false);
     }
@@ -427,11 +348,6 @@ const StockScreener = () => {
   
   const handleNumCandlesChange = (e) => {
     setNumCandles(Number(e.target.value));
-  };
-  
-  // Add date handling functions
-  const handleDateChange = (newDate) => {
-    setSelectedDate(newDate);
   };
   
   const handlePrevDayHighCrossSearch = async () => {
@@ -656,8 +572,24 @@ const StockScreener = () => {
   // Values for max results slider
   const maxResultsMarks = [
     { value: 5, label: '5' },
+    { value: 10, label: '10' },
+    { value: 15, label: '15' },
+    { value: 20, label: '20' },
     { value: 25, label: '25' },
+    { value: 30, label: '30' },
+    { value: 35, label: '35' },
+    { value: 40, label: '40' },
+    { value: 45, label: '45' },
     { value: 50, label: '50' },
+    { value: 55, label: '55' },
+    { value: 60, label: '60' },
+    { value: 65, label: '65' },
+    { value: 70, label: '70' },
+    { value: 75, label: '75' },
+    { value: 80, label: '80' },
+    { value: 85, label: '85' },
+    { value: 90, label: '90' },
+    { value: 95, label: '95' },
     { value: 100, label: '100' },
   ];
 
@@ -893,2019 +825,1847 @@ const StockScreener = () => {
   }, []);
 
   return (
-    <Container maxWidth="xl">
+    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+        Stock Screener
+      </Typography>
+            
+      {/* Rest of your component JSX */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Stock Screener
+        <Typography variant="h6" gutterBottom>
+          Screener Options
         </Typography>
         
-        {/* Rest of the existing code */}
-        <Paper 
-          elevation={searchFocused ? 8 : 2} 
-          sx={{ 
-            p: 0.5, 
-            mb: 3, 
-            transition: 'all 0.3s ease',
-            borderRadius: 3,
-            border: searchFocused ? '1px solid #3f51b5' : '1px solid #e0e0e0',
-            boxShadow: searchFocused ? '0 4px 20px rgba(0, 0, 0, 0.1)' : 'none'
-          }}
-        >
-          <Autocomplete
-            freeSolo
-            options={searchSuggestions}
-            getOptionLabel={(option) => {
-              if (typeof option === 'string') return option;
-              return option.symbol || '';
-            }}
-            renderOption={(props, option) => {
-              const stockOption = typeof option === 'string' 
-                ? { symbol: option } 
-                : option;
-              
-              return (
-                <li {...props} style={{ padding: '8px 16px' }}>
-                  <Grid container alignItems="center">
-                    <Grid item xs>
-                      <Typography variant="body1" fontWeight="bold">
-                        {stockOption.symbol}
-                      </Typography>
-                      {stockOption.name && (
-                        <Typography variant="body2" color="text.secondary">
-                          {stockOption.name}
-                        </Typography>
-                      )}
-                    </Grid>
-                    {stockOption.sector && (
-                      <Grid item>
-                        <Chip 
-                          label={stockOption.sector} 
-                          size="small" 
-                          sx={{ fontSize: '0.7rem', borderRadius: 1 }} 
-                        />
-                      </Grid>
-                    )}
-                  </Grid>
-                </li>
-              );
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                placeholder="Search for stock symbols or companies..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                variant="outlined"
-                fullWidth
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon color="primary" sx={{ ml: 1 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <>
-                      {isSearching ? (
-                        <CircularProgress color="inherit" size={20} />
-                      ) : searchQuery ? (
-                        <InputAdornment position="end">
-                          <IconButton 
-                            edge="end" 
-                            onClick={handleClearSearch}
-                            size="small"
-                          >
-                            <ClearIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      ) : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                  sx: { 
-                    borderRadius: 3,
-                    pl: 1,
-                    pr: 1,
-                    fontSize: '1.1rem'
-                  }
-                }}
-                onKeyPress={handleKeyPress}
-              />
-            )}
-            onChange={(event, value) => {
-              if (value && typeof value === 'string') {
-                handleSearchSubmit(value);
-              } else if (value && value.symbol) {
-                handleSearchSubmit(value.symbol);
-              }
-            }}
-          />
-        </Paper>
-        
-        <Box sx={{ mb: 2 }}>
-          <Grid container spacing={1}>
-            {/* Quick Search Chips */}
-            {topSymbols.map((symbol) => (
-              <Grid item key={symbol}>
-                <Chip
-                  label={symbol}
-                  clickable
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => handleSearchSubmit(symbol)}
-                  sx={{ 
-                    borderRadius: 2,
-                    '&:hover': { backgroundColor: 'rgba(63, 81, 181, 0.08)' }
+        {/* Add Max Results Slider in a nice card */}
+        <Paper sx={{ p: 2, mb: 3, borderRadius: 2, background: 'linear-gradient(to right, #f8f9fa, #f5f5f5)' }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={4}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                Maximum Results:
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={8}>
+              <Box sx={{ px: 2 }}>
+                <Slider
+                  value={maxResults}
+                  onChange={handleMaxResultsChange}
+                  min={5}
+                  max={100}
+                  step={null}
+                  marks={maxResultsMarks}
+                  valueLabelDisplay="auto"
+                  sx={{
+                    '& .MuiSlider-thumb': {
+                      height: 24,
+                      width: 24,
+                      backgroundColor: '#fff',
+                      border: '2px solid currentColor',
+                      '&:focus, &:hover, &.Mui-active, &.Mui-focusVisible': {
+                        boxShadow: '0px 0px 0px 8px rgba(63, 81, 181, 0.16)',
+                      },
+                    }
                   }}
                 />
-              </Grid>
-            ))}
-            
-            {/* Recent Searches */}
-            {recentSearches.length > 0 && (
-              <>
-                <Grid item xs={12}>
-                  <Divider sx={{ my: 1 }}>
-                    <Chip 
-                      label="Recent Searches" 
-                      size="small" 
-                      variant="outlined"
-                      sx={{ fontSize: '0.7rem' }} 
-                    />
-                  </Divider>
-                </Grid>
-                {recentSearches.map((symbol) => (
-                  <Grid item key={`recent-${symbol}`}>
-                    <Chip
-                      label={symbol}
-                      size="small"
-                      clickable
-                      onClick={() => handleSearchSubmit(symbol)}
-                      onDelete={() => {
-                        const updated = recentSearches.filter(s => s !== symbol);
-                        setRecentSearches(updated);
-                        localStorage.setItem('recentStockSearches', JSON.stringify(updated));
-                      }}
-                      sx={{ 
-                        borderRadius: 2,
-                        bgcolor: 'rgba(0, 0, 0, 0.04)'
-                      }}
-                    />
-                  </Grid>
-                ))}
-              </>
-            )}
+              </Box>
+            </Grid>
           </Grid>
-        </Box>
+        </Paper>
         
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button 
-            variant="outlined" 
-            startIcon={<RefreshIcon />} 
-            onClick={refreshData}
-            sx={{ borderRadius: 2 }}
-          >
-            Refresh Data
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Screener Options */}
-      <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 2, fontWeight: 600 }}>
-        Screener Options
-      </Typography>
-      
-      {/* Add Max Results Slider in a nice card */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 2, background: 'linear-gradient(to right, #f8f9fa, #f5f5f5)' }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-              Maximum Results:
-            </Typography>
+        {/* Filter buttons - updated layout with 4 options */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={6} lg={3}>
+            <Button
+              fullWidth
+              variant={showPrevDayHighCross ? "contained" : "outlined"}
+              startIcon={<TrendingUpIcon />}
+              onClick={() => {
+                setShowPositiveCandles(false);
+                setShowPrevDayHighCross(true);
+                setShowNegativeCandles(false);
+                setShowPrevDayLowCross(false);
+              }}
+              sx={{ 
+                py: 1.5,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 2,
+                height: '100%'
+              }}
+            >
+              Above Previous Day High
+            </Button>
           </Grid>
-          <Grid item xs={12} sm={8}>
-            <Box sx={{ px: 2 }}>
-              <Slider
-                value={maxResults}
-                onChange={handleMaxResultsChange}
-                min={5}
-                max={100}
-                step={null}
-                marks={maxResultsMarks}
-                valueLabelDisplay="auto"
+          <Grid item xs={12} md={6} lg={3}>
+            <Button
+              fullWidth
+              variant={showPrevDayLowCross ? "contained" : "outlined"}
+              startIcon={<TrendingUpIcon sx={{ transform: 'rotate(180deg)' }} />}
+              onClick={() => {
+                setShowPositiveCandles(false);
+                setShowPrevDayHighCross(false);
+                setShowNegativeCandles(false);
+                setShowPrevDayLowCross(true);
+              }}
+              sx={{ 
+                py: 1.5,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 2,
+                height: '100%'
+              }}
+            >
+              Below Previous Day Low
+            </Button>
+          </Grid>
+          <Grid item xs={12} md={6} lg={3}>
+            <Button
+              fullWidth
+              variant={showPositiveCandles ? "contained" : "outlined"}
+              startIcon={<ShowChartIcon />}
+              onClick={() => {
+                setShowPositiveCandles(true);
+                setShowPrevDayHighCross(false);
+                setShowNegativeCandles(false);
+                setShowPrevDayLowCross(false);
+              }}
+              sx={{ 
+                py: 1.5,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 2,
+                height: '100%'
+              }}
+            >
+              Consecutive Positive Candles
+            </Button>
+          </Grid>
+          <Grid item xs={12} md={6} lg={3}>
+            <Button
+              fullWidth
+              variant={showNegativeCandles ? "contained" : "outlined"}
+              startIcon={<ShowChartIcon sx={{ transform: 'scaleY(-1)' }} />}
+              onClick={() => {
+                setShowPositiveCandles(false);
+                setShowPrevDayHighCross(false);
+                setShowNegativeCandles(true);
+                setShowPrevDayLowCross(false);
+              }}
+              sx={{ 
+                py: 1.5,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 2,
+                height: '100%'
+              }}
+            >
+              Consecutive Negative Candles
+            </Button>
+          </Grid>
+        </Grid>
+        
+        {/* Positive Candles Screener */}
+        {showPositiveCandles && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6">Consecutive Positive Candles Screener</Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This screener finds stocks that have {numCandles} consecutive positive candles (close &gt; open) on the {timeframe} timeframe.
+              These stocks may be in a strong uptrend and could present trading opportunities.
+            </Alert>
+            
+            <Grid container spacing={3}>
+              {/* Timeframe Selection */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Timeframe</InputLabel>
+                  <Select
+                    value={timeframe}
+                    onChange={handleTimeframeChange}
+                    label="Timeframe"
+                  >
+                    <MenuItem value="1m">1 Minute</MenuItem>
+                    <MenuItem value="5m">5 Minutes</MenuItem>
+                    <MenuItem value="15m">15 Minutes</MenuItem>
+                    <MenuItem value="30m">30 Minutes</MenuItem>
+                    <MenuItem value="1h">1 Hour</MenuItem>
+                    <MenuItem value="4h">4 Hours</MenuItem>
+                    <MenuItem value="1d">1 Day</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Number of Candles */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Consecutive Candles</InputLabel>
+                  <Select
+                    value={numCandles}
+                    onChange={handleNumCandlesChange}
+                    label="Consecutive Candles"
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      <MenuItem key={num} value={num}>{num} Candles</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Search Button */}
+              <Grid item xs={12} md={4}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={handlePositiveCandlesSearch}
+                  disabled={loading}
+                  sx={{ height: '56px' }}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Find Stocks'}
+                </Button>
+              </Grid>
+            </Grid>
+            
+            {/* Toggle for Advanced Filters */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              p: 2, 
+              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+              borderRadius: 2,
+              mb: 2,
+              mt: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Advanced Filters
+                </Typography>
+              </Box>
+              <Switch 
+                checked={showAdvancedInPC}
+                onChange={(e) => setShowAdvancedInPC(e.target.checked)}
+                color="primary"
                 sx={{
-                  '& .MuiSlider-thumb': {
-                    height: 24,
-                    width: 24,
-                    backgroundColor: '#fff',
-                    border: '2px solid currentColor',
-                    '&:focus, &:hover, &.Mui-active, &.Mui-focusVisible': {
-                      boxShadow: '0px 0px 0px 8px rgba(63, 81, 181, 0.16)',
-                    },
-                  }
+                  '& .MuiSwitch-switchBase.Mui-checked': {
+                    color: 'primary.main',
+                  },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                    backgroundColor: 'primary.main',
+                  },
                 }}
               />
             </Box>
-          </Grid>
-        </Grid>
-      </Paper>
-      
-      {/* Filter buttons - updated layout with 4 options */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={6} lg={3}>
-          <Button
-            fullWidth
-            variant={showPrevDayHighCross ? "contained" : "outlined"}
-            startIcon={<TrendingUpIcon />}
-            onClick={() => {
-              setShowPositiveCandles(false);
-              setShowPrevDayHighCross(true);
-              setShowNegativeCandles(false);
-              setShowPrevDayLowCross(false);
-            }}
-            sx={{ 
-              py: 1.5,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 2,
-              height: '100%'
-            }}
-          >
-            Above Previous Day High
-          </Button>
-        </Grid>
-        <Grid item xs={12} md={6} lg={3}>
-          <Button
-            fullWidth
-            variant={showPrevDayLowCross ? "contained" : "outlined"}
-            startIcon={<TrendingUpIcon sx={{ transform: 'rotate(180deg)' }} />}
-            onClick={() => {
-              setShowPositiveCandles(false);
-              setShowPrevDayHighCross(false);
-              setShowNegativeCandles(false);
-              setShowPrevDayLowCross(true);
-            }}
-            sx={{ 
-              py: 1.5,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 2,
-              height: '100%'
-            }}
-          >
-            Below Previous Day Low
-          </Button>
-        </Grid>
-        <Grid item xs={12} md={6} lg={3}>
-          <Button
-            fullWidth
-            variant={showPositiveCandles ? "contained" : "outlined"}
-            startIcon={<ShowChartIcon />}
-            onClick={() => {
-              setShowPositiveCandles(true);
-              setShowPrevDayHighCross(false);
-              setShowNegativeCandles(false);
-              setShowPrevDayLowCross(false);
-            }}
-            sx={{ 
-              py: 1.5,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 2,
-              height: '100%'
-            }}
-          >
-            Consecutive Positive Candles
-          </Button>
-        </Grid>
-        <Grid item xs={12} md={6} lg={3}>
-          <Button
-            fullWidth
-            variant={showNegativeCandles ? "contained" : "outlined"}
-            startIcon={<ShowChartIcon sx={{ transform: 'scaleY(-1)' }} />}
-            onClick={() => {
-              setShowPositiveCandles(false);
-              setShowPrevDayHighCross(false);
-              setShowNegativeCandles(true);
-              setShowPrevDayLowCross(false);
-            }}
-            sx={{ 
-              py: 1.5,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 2,
-              height: '100%'
-            }}
-          >
-            Consecutive Negative Candles
-          </Button>
-        </Grid>
-      </Grid>
-      
-      {/* Positive Candles Screener */}
-      {showPositiveCandles && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Consecutive Positive Candles Screener</Typography>
-          </Box>
-
-          <Alert severity="info" sx={{ mb: 2 }}>
-            This screener finds stocks that have {numCandles} consecutive positive candles (close &gt; open) on the {timeframe} timeframe.
-            These stocks may be in a strong uptrend and could present trading opportunities.
-          </Alert>
-          
-          <Grid container spacing={3}>
-            {/* Timeframe Selection */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Timeframe</InputLabel>
-                <Select
-                  value={timeframe}
-                  onChange={handleTimeframeChange}
-                  label="Timeframe"
-                >
-                  <MenuItem value="1m">1 Minute</MenuItem>
-                  <MenuItem value="5m">5 Minutes</MenuItem>
-                  <MenuItem value="15m">15 Minutes</MenuItem>
-                  <MenuItem value="30m">30 Minutes</MenuItem>
-                  <MenuItem value="1h">1 Hour</MenuItem>
-                  <MenuItem value="4h">4 Hours</MenuItem>
-                  <MenuItem value="1d">1 Day</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
             
-            {/* Number of Candles */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Consecutive Candles</InputLabel>
-                <Select
-                  value={numCandles}
-                  onChange={handleNumCandlesChange}
-                  label="Consecutive Candles"
-                >
-                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                    <MenuItem key={num} value={num}>{num} Candles</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Search Button */}
-            <Grid item xs={12} md={4}>
-              <Button
-                fullWidth
-                variant="contained"
-                color="primary"
-                onClick={handlePositiveCandlesSearch}
-                disabled={loading}
-                sx={{ height: '56px' }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Find Stocks'}
-              </Button>
-            </Grid>
-          </Grid>
-          
-          {/* Toggle for Advanced Filters */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2, 
-            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-            borderRadius: 2,
-            mb: 2,
-            mt: 2
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="subtitle1" fontWeight={500}>
-                Advanced Filters
-              </Typography>
-            </Box>
-            <Switch 
-              checked={showAdvancedInPC}
-              onChange={(e) => setShowAdvancedInPC(e.target.checked)}
-              color="primary"
-              sx={{
-                '& .MuiSwitch-switchBase.Mui-checked': {
-                  color: 'primary.main',
-                },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                  backgroundColor: 'primary.main',
-                },
-              }}
-            />
-          </Box>
-          
-          {/* Advanced Filters in Positive Candles Screener */}
-          {showAdvancedInPC && (
-            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks:
-              </Typography>
-              
-              <Tabs
-                value={selectedFilterTab}
-                onChange={handleFilterTabChange}
-                indicatorColor="primary"
-                textColor="primary"
-                variant="standard"
-                sx={{ mb: 2 }}
-              >
-                <Tab label="Price" value="price" />
-                <Tab label="Change %" value="change" />
-                <Tab label="Volume" value="volume" />
-                <Tab label="Sector" value="sector" />
-              </Tabs>
-              
-              {selectedFilterTab === 'price' && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={priceFilterType}
-                      exclusive
-                      onChange={handlePriceFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="range">Price Range</ToggleButton>
-                      <ToggleButton value="above">Above Price</ToggleButton>
-                      <ToggleButton value="below">Below Price</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {priceFilterType === "range" && (
-                      <>
-                        <Typography gutterBottom>
-                          Price Range: ${priceRange[0]} to ${priceRange[1]}
-                        </Typography>
-                        <Slider
-                          value={priceRange}
-                          onChange={handlePriceRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPrice}
-                          min={0}
-                          max={2000}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {priceFilterType === "above" && (
-                      <TextField
-                        label="Price Above"
-                        type="number"
-                        value={priceAbove}
-                        onChange={(e) => setPriceAbove(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                    
-                    {priceFilterType === "below" && (
-                      <TextField
-                        label="Price Below"
-                        type="number"
-                        value={priceBelow}
-                        onChange={(e) => setPriceBelow(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === 'change' && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={changeFilterType}
-                      exclusive
-                      onChange={handleChangeFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="any">Any Change Range</ToggleButton>
-                      <ToggleButton value="up">% Up Only</ToggleButton>
-                      <ToggleButton value="down">% Down Only</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {changeFilterType === "any" && (
-                      <>
-                        <Typography gutterBottom>
-                          Change %: {changeRange[0]}% to {changeRange[1]}%
-                        </Typography>
-                        <Slider
-                          value={changeRange}
-                          onChange={handleChangeRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPercentage}
-                          min={-200}
-                          max={200}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {changeFilterType === "up" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Change"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Change"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                    
-                    {changeFilterType === "down" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Down"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Down"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === 'volume' && (
-                <Box sx={{ p: 1 }}>
-                  <Typography id="volume-range-slider" gutterBottom>
-                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
-                  </Typography>
-                  <Slider
-                    value={volumeRange}
-                    onChange={handleVolumeRangeChange}
-                    valueLabelFormat={formatVolume}
-                    valueLabelDisplay="auto"
-                    min={0}
-                    max={100000000}
-                    step={1000000}
-                    sx={{ width: '100%' }}
-                  />
-                </Box>
-              )}
-              
-              {selectedFilterTab === 'sector' && (
-                <Box sx={{ p: 1 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Sector</InputLabel>
-                        <Select
-                          value={sector}
-                          onChange={handleSectorChange}
-                          label="Sector"
-                        >
-                          <MenuItem value="">
-                            <em>All Sectors</em>
-                          </MenuItem>
-                          {sectors.map((sector) => (
-                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Industry</InputLabel>
-                        <Select
-                          value={industry}
-                          onChange={handleIndustryChange}
-                          label="Industry"
-                        >
-                          <MenuItem value="">
-                            <em>All Industries</em>
-                          </MenuItem>
-                          {industries.map((industryOption) => (
-                            <MenuItem key={industryOption} value={industryOption}>
-                              {industryOption}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    {/* Add Exchange Selection */}
-                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
-                      <FormControl fullWidth>
-                        <InputLabel>Exchange</InputLabel>
-                        <Select
-                          value={exchange}
-                          onChange={handleExchangeChange}
-                          label="Exchange"
-                        >
-                          <MenuItem value="">
-                            <em>All Exchanges</em>
-                          </MenuItem>
-                          {exchanges.map((ex) => (
-                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-            </Box>
-          )}
-        </Paper>
-      )}
-      
-      {/* Negative Candles Screener */}
-      {showNegativeCandles && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Consecutive Negative Candles Screener</Typography>
-          </Box>
-
-          <Alert severity="info" sx={{ mb: 2 }}>
-            This screener finds stocks that have {numCandles} consecutive negative candles (close &lt; open) on the {timeframe} timeframe.
-            These stocks may be in a strong downtrend and could present trading opportunities.
-          </Alert>
-          
-          <Grid container spacing={3}>
-            {/* Timeframe Selection */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Timeframe</InputLabel>
-                <Select
-                  value={timeframe}
-                  onChange={handleTimeframeChange}
-                  label="Timeframe"
-                >
-                  <MenuItem value="1m">1 Minute</MenuItem>
-                  <MenuItem value="5m">5 Minutes</MenuItem>
-                  <MenuItem value="15m">15 Minutes</MenuItem>
-                  <MenuItem value="30m">30 Minutes</MenuItem>
-                  <MenuItem value="1h">1 Hour</MenuItem>
-                  <MenuItem value="4h">4 Hours</MenuItem>
-                  <MenuItem value="1d">1 Day</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Number of Candles */}
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Consecutive Candles</InputLabel>
-                <Select
-                  value={numCandles}
-                  onChange={handleNumCandlesChange}
-                  label="Consecutive Candles"
-                >
-                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                    <MenuItem key={num} value={num}>{num} Candles</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Search Button */}
-            <Grid item xs={12} md={4}>
-              <Button
-                fullWidth
-                variant="contained"
-                color="primary"
-                onClick={handleNegativeCandlesSearch}
-                disabled={loading}
-                sx={{ height: '56px' }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Find Stocks'}
-              </Button>
-            </Grid>
-          </Grid>
-          
-          {/* Advanced Filters Toggle - reuse the same advanced filters section as positive candles */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2, 
-            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-            borderRadius: 2,
-            mb: 2,
-            mt: 2
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="subtitle1" fontWeight={500}>
-                Advanced Filters
-              </Typography>
-            </Box>
-            <Switch 
-              checked={showAdvancedInPC}
-              onChange={(e) => setShowAdvancedInPC(e.target.checked)}
-              color="primary"
-            />
-          </Box>
-          
-          {/* Advanced Filters Content - reuse the same content as positive candles */}
-          {showAdvancedInPC && (
-            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks:
-              </Typography>
-              
-              <Tabs
-                value={selectedFilterTab}
-                onChange={handleFilterTabChange}
-                indicatorColor="primary"
-                textColor="primary"
-                variant="standard"
-                sx={{ mb: 2 }}
-              >
-                <Tab label="Price" value="price" />
-                <Tab label="Change %" value="change" />
-                <Tab label="Volume" value="volume" />
-                <Tab label="Sector" value="sector" />
-              </Tabs>
-              
-              {selectedFilterTab === "price" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={priceFilterType}
-                      exclusive
-                      onChange={handlePriceFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="range">Price Range</ToggleButton>
-                      <ToggleButton value="above">Above Price</ToggleButton>
-                      <ToggleButton value="below">Below Price</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {priceFilterType === "range" && (
-                      <>
-                        <Typography gutterBottom>
-                          Price Range: ${priceRange[0]} to ${priceRange[1]}
-                        </Typography>
-                        <Slider
-                          value={priceRange}
-                          onChange={handlePriceRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPrice}
-                          min={0}
-                          max={2000}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {priceFilterType === "above" && (
-                      <TextField
-                        label="Price Above"
-                        type="number"
-                        value={priceAbove}
-                        onChange={(e) => setPriceAbove(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                    
-                    {priceFilterType === "below" && (
-                      <TextField
-                        label="Price Below"
-                        type="number"
-                        value={priceBelow}
-                        onChange={(e) => setPriceBelow(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "change" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={changeFilterType}
-                      exclusive
-                      onChange={handleChangeFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="any">Any Change Range</ToggleButton>
-                      <ToggleButton value="up">% Up Only</ToggleButton>
-                      <ToggleButton value="down">% Down Only</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {changeFilterType === "any" && (
-                      <>
-                        <Typography gutterBottom>
-                          Change %: {changeRange[0]}% to {changeRange[1]}%
-                        </Typography>
-                        <Slider
-                          value={changeRange}
-                          onChange={handleChangeRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPercentage}
-                          min={-200}
-                          max={200}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {changeFilterType === "up" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Change"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Change"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                    
-                    {changeFilterType === "down" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Down"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Down"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "volume" && (
-                <Box>
-                  <Typography gutterBottom>
-                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
-                  </Typography>
-                  <Slider
-                    value={volumeRange}
-                    onChange={handleVolumeRangeChange}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={formatVolume}
-                    min={1000}
-                    max={100000000}
-                    step={10000}
-                    scale={(x) => x}
-                  />
-                  
-                  <Grid container spacing={2} sx={{ mt: 2 }}>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Min Volume"
-                        type="number"
-                        value={volumeRange[0]}
-                        onChange={(e) => handleVolumeInputChange(0, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Max Volume"
-                        type="number"
-                        value={volumeRange[1]}
-                        onChange={(e) => handleVolumeInputChange(1, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "sector" && (
-                <Box sx={{ p: 1 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Sector</InputLabel>
-                        <Select
-                          value={sector}
-                          onChange={handleSectorChange}
-                          label="Sector"
-                        >
-                          <MenuItem value="">
-                            <em>All Sectors</em>
-                          </MenuItem>
-                          {sectors.map((sector) => (
-                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Industry</InputLabel>
-                        <Select
-                          value={industry}
-                          onChange={handleIndustryChange}
-                          label="Industry"
-                        >
-                          <MenuItem value="">
-                            <em>All Industries</em>
-                          </MenuItem>
-                          {industries.map((industryOption) => (
-                            <MenuItem key={industryOption} value={industryOption}>
-                              {industryOption}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
-                      <FormControl fullWidth>
-                        <InputLabel>Exchange</InputLabel>
-                        <Select
-                          value={exchange}
-                          onChange={handleExchangeChange}
-                          label="Exchange"
-                        >
-                          <MenuItem value="">
-                            <em>All Exchanges</em>
-                          </MenuItem>
-                          {exchanges.map((ex) => (
-                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-            </Box>
-          )}
-        </Paper>
-      )}
-      
-      {/* Above Previous Day High Screener */}
-      {showPrevDayHighCross && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Stocks Above Previous Day High Screener</Typography>
-          </Box>
-          
-          <Alert severity="info" sx={{ mb: 2 }}>
-            This screener finds stocks that have their current price crossing above the previous day's high.
-            This can signal increased momentum and potential breakout opportunities.
-          </Alert>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
-                <Typography variant="body1" color="text.secondary">
-                  Finds stocks currently trading above their previous day's high
+            {/* Advanced Filters in Positive Candles Screener */}
+            {showAdvancedInPC && (
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Narrow down stocks:
                 </Typography>
-              </Paper>
-            </Grid>
-            
-            {/* Search Button */}
-            <Grid item xs={12} md={4}>
-              <Button
-                fullWidth
-                variant="contained"
-                color="primary"
-                onClick={handlePrevDayHighCrossSearch}
-                disabled={loading}
-                startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
-                sx={{ height: '56px' }}
-              >
-                {loading ? 'Searching...' : 'Find Stocks'}
-              </Button>
-            </Grid>
-          </Grid>
-          
-          {/* Advanced Filters Toggle */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2, 
-            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-            borderRadius: 2,
-            mb: 2,
-            mt: 2
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="subtitle1" fontWeight={500}>
-                Advanced Filters
-              </Typography>
-            </Box>
-            <Switch 
-              checked={showAdvancedInPDHC}
-              onChange={(e) => setShowAdvancedInPDHC(e.target.checked)}
-              color="primary"
-            />
-          </Box>
-          
-          {/* Advanced Filters Content - reuse the same content as positive candles */}
-          {showAdvancedInPDHC && (
-            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks:
-              </Typography>
-              
-              <Tabs
-                value={selectedFilterTab}
-                onChange={handleFilterTabChange}
-                indicatorColor="primary"
-                textColor="primary"
-                variant="standard"
-                sx={{ mb: 2 }}
-              >
-                <Tab label="Price" value="price" />
-                <Tab label="Change %" value="change" />
-                <Tab label="Volume" value="volume" />
-                <Tab label="Sector" value="sector" />
-              </Tabs>
-              
-              {selectedFilterTab === "price" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={priceFilterType}
-                      exclusive
-                      onChange={handlePriceFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="range">Price Range</ToggleButton>
-                      <ToggleButton value="above">Above Price</ToggleButton>
-                      <ToggleButton value="below">Below Price</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {priceFilterType === "range" && (
-                      <>
-                        <Typography gutterBottom>
-                          Price Range: ${priceRange[0]} to ${priceRange[1]}
-                        </Typography>
-                        <Slider
-                          value={priceRange}
-                          onChange={handlePriceRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPrice}
-                          min={0}
-                          max={2000}
-                          sx={{ mt: 1 }}
+                
+                <Tabs
+                  value={selectedFilterTab}
+                  onChange={handleFilterTabChange}
+                  indicatorColor="primary"
+                  textColor="primary"
+                  variant="standard"
+                  sx={{ mb: 2 }}
+                >
+                  <Tab label="Price" value="price" />
+                  <Tab label="Change %" value="change" />
+                  <Tab label="Volume" value="volume" />
+                  <Tab label="Sector" value="sector" />
+                </Tabs>
+                
+                {selectedFilterTab === 'price' && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={priceFilterType}
+                        exclusive
+                        onChange={handlePriceFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="range">Price Range</ToggleButton>
+                        <ToggleButton value="above">Above Price</ToggleButton>
+                        <ToggleButton value="below">Below Price</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {priceFilterType === "range" && (
+                        <>
+                          <Typography gutterBottom>
+                            Price Range: ${priceRange[0]} to ${priceRange[1]}
+                          </Typography>
+                          <Slider
+                            value={priceRange}
+                            onChange={handlePriceRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPrice}
+                            min={0}
+                            max={2000}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {priceFilterType === "above" && (
+                        <TextField
+                          label="Price Above"
+                          type="number"
+                          value={priceAbove}
+                          onChange={(e) => setPriceAbove(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
                         />
-                      </>
-                    )}
-                    
-                    {priceFilterType === "above" && (
-                      <TextField
-                        label="Price Above"
-                        type="number"
-                        value={priceAbove}
-                        onChange={(e) => setPriceAbove(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                    
-                    {priceFilterType === "below" && (
-                      <TextField
-                        label="Price Below"
-                        type="number"
-                        value={priceBelow}
-                        onChange={(e) => setPriceBelow(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "change" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={changeFilterType}
-                      exclusive
-                      onChange={handleChangeFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="any">Any Change Range</ToggleButton>
-                      <ToggleButton value="up">% Up Only</ToggleButton>
-                      <ToggleButton value="down">% Down Only</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {changeFilterType === "any" && (
-                      <>
-                        <Typography gutterBottom>
-                          Change %: {changeRange[0]}% to {changeRange[1]}%
-                        </Typography>
-                        <Slider
-                          value={changeRange}
-                          onChange={handleChangeRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPercentage}
-                          min={-200}
-                          max={200}
-                          sx={{ mt: 1 }}
+                      )}
+                      
+                      {priceFilterType === "below" && (
+                        <TextField
+                          label="Price Below"
+                          type="number"
+                          value={priceBelow}
+                          onChange={(e) => setPriceBelow(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
                         />
-                      </>
-                    )}
-                    
-                    {changeFilterType === "up" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Change"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Change"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                    
-                    {changeFilterType === "down" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Down"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Down"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
+                      )}
+                    </Box>
                   </Box>
-                </Box>
-              )}
-              
-              
-              {selectedFilterTab === "volume" && (
-                <Box>
-                  <Typography gutterBottom>
-                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
-                  </Typography>
-                  <Slider
-                    value={volumeRange}
-                    onChange={handleVolumeRangeChange}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={formatVolume}
-                    min={1000}
-                    max={100000000}
-                    step={10000}
-                    scale={(x) => x}
-                  />
-                  
-                  <Grid container spacing={2} sx={{ mt: 2 }}>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Min Volume"
-                        type="number"
-                        value={volumeRange[0]}
-                        onChange={(e) => handleVolumeInputChange(0, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Max Volume"
-                        type="number"
-                        value={volumeRange[1]}
-                        onChange={(e) => handleVolumeInputChange(1, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "sector" && (
-                <Box sx={{ p: 1 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Sector</InputLabel>
-                        <Select
-                          value={sector}
-                          onChange={handleSectorChange}
-                          label="Sector"
-                        >
-                          <MenuItem value="">
-                            <em>All Sectors</em>
-                          </MenuItem>
-                          {sectors.map((sector) => (
-                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Industry</InputLabel>
-                        <Select
-                          value={industry}
-                          onChange={handleIndustryChange}
-                          label="Industry"
-                        >
-                          <MenuItem value="">
-                            <em>All Industries</em>
-                          </MenuItem>
-                          {industries.map((ind) => (
-                            <MenuItem key={ind} value={ind}>{ind}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
-                      <FormControl fullWidth>
-                        <InputLabel>Exchange</InputLabel>
-                        <Select
-                          value={exchange}
-                          onChange={handleExchangeChange}
-                          label="Exchange"
-                        >
-                          <MenuItem value="">
-                            <em>All Exchanges</em>
-                          </MenuItem>
-                          {exchanges.map((ex) => (
-                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-            </Box>
-          )}
-        </Paper>
-      )}
-      
-      {/* Below Previous Day Low Screener */}
-      {showPrevDayLowCross && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Stocks Below Previous Day Low Screener</Typography>
-          </Box>
-          
-          <Alert severity="info" sx={{ mb: 2 }}>
-            This screener finds stocks that have their current price below the previous day's low.
-            This can signal increased downward momentum and potential breakdown opportunities.
-          </Alert>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
-                <Typography variant="body1" color="text.secondary">
-                  Finds stocks currently trading below their previous day's low
-                </Typography>
-              </Paper>
-            </Grid>
-            
-            {/* Search Button */}
-            <Grid item xs={12} md={4}>
-              <Button
-                fullWidth
-                variant="contained"
-                color="primary"
-                onClick={handlePrevDayLowCrossSearch}
-                disabled={loading}
-                startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
-                sx={{ height: '56px' }}
-              >
-                {loading ? 'Searching...' : 'Find Stocks'}
-              </Button>
-            </Grid>
-          </Grid>
-          
-          {/* Advanced Filters Toggle */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2, 
-            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-            borderRadius: 2,
-            mb: 2,
-            mt: 2
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="subtitle1" fontWeight={500}>
-                Advanced Filters
-              </Typography>
-            </Box>
-            <Switch 
-              checked={showAdvancedInPDHC}
-              onChange={(e) => setShowAdvancedInPDHC(e.target.checked)}
-              color="primary"
-            />
-          </Box>
-          
-          {/* Advanced Filters Content - reuse the same content as Previous Day High Cross */}
-          {showAdvancedInPDHC && (
-            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Narrow down stocks:
-              </Typography>
-              
-              <Tabs
-                value={selectedFilterTab}
-                onChange={handleFilterTabChange}
-                indicatorColor="primary"
-                textColor="primary"
-                variant="standard"
-                sx={{ mb: 2 }}
-              >
-                <Tab label="Price" value="price" />
-                <Tab label="Change %" value="change" />
-                <Tab label="Volume" value="volume" />
-                <Tab label="Sector" value="sector" />
-              </Tabs>
-              
-              {selectedFilterTab === "price" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={priceFilterType}
-                      exclusive
-                      onChange={handlePriceFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="range">Price Range</ToggleButton>
-                      <ToggleButton value="above">Above Price</ToggleButton>
-                      <ToggleButton value="below">Below Price</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {priceFilterType === "range" && (
-                      <>
-                        <Typography gutterBottom>
-                          Price Range: ${priceRange[0]} to ${priceRange[1]}
-                        </Typography>
-                        <Slider
-                          value={priceRange}
-                          onChange={handlePriceRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPrice}
-                          min={0}
-                          max={2000}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {priceFilterType === "above" && (
-                      <TextField
-                        label="Price Above"
-                        type="number"
-                        value={priceAbove}
-                        onChange={(e) => setPriceAbove(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                    
-                    {priceFilterType === "below" && (
-                      <TextField
-                        label="Price Below"
-                        type="number"
-                        value={priceBelow}
-                        onChange={(e) => setPriceBelow(Number(e.target.value))}
-                        fullWidth
-                        InputProps={{
-                          startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "change" && (
-                <Box>
-                  <Box sx={{ mb: 3 }}>
-                    <ToggleButtonGroup
-                      value={changeFilterType}
-                      exclusive
-                      onChange={handleChangeFilterTypeChange}
-                      fullWidth
-                      color="primary"
-                      sx={{ mb: 2 }}
-                    >
-                      <ToggleButton value="any">Any Change Range</ToggleButton>
-                      <ToggleButton value="up">% Up Only</ToggleButton>
-                      <ToggleButton value="down">% Down Only</ToggleButton>
-                    </ToggleButtonGroup>
-                    
-                    {changeFilterType === "any" && (
-                      <>
-                        <Typography gutterBottom>
-                          Change %: {changeRange[0]}% to {changeRange[1]}%
-                        </Typography>
-                        <Slider
-                          value={changeRange}
-                          onChange={handleChangeRangeChange}
-                          valueLabelDisplay="auto"
-                          valueLabelFormat={formatPercentage}
-                          min={-200}
-                          max={200}
-                          sx={{ mt: 1 }}
-                        />
-                      </>
-                    )}
-                    
-                    {changeFilterType === "up" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Change"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Change"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                    
-                    {changeFilterType === "down" && (
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Minimum % Down"
-                            type="number"
-                            value={changeMin}
-                            onChange={(e) => setChangeMin(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            label="Maximum % Down"
-                            type="number"
-                            value={changeMax}
-                            onChange={(e) => setChangeMax(Number(e.target.value))}
-                            fullWidth
-                            InputProps={{
-                              endAdornment: <Typography>%</Typography>,
-                              inputProps: { min: 0 }
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    )}
-                  </Box>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "volume" && (
-                <Box>
-                  <Typography gutterBottom>
-                    Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
-                  </Typography>
-                  <Slider
-                    value={volumeRange}
-                    onChange={handleVolumeRangeChange}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={formatVolume}
-                    min={1000}
-                    max={100000000}
-                    step={10000}
-                    scale={(x) => x}
-                  />
-                  
-                  <Grid container spacing={2} sx={{ mt: 2 }}>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Min Volume"
-                        type="number"
-                        value={volumeRange[0]}
-                        onChange={(e) => handleVolumeInputChange(0, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        label="Max Volume"
-                        type="number"
-                        value={volumeRange[1]}
-                        onChange={(e) => handleVolumeInputChange(1, e)}
-                        fullWidth
-                        InputProps={{
-                          inputProps: { min: 0 }
-                        }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-              
-              {selectedFilterTab === "sector" && (
-                <Box sx={{ p: 1 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Sector</InputLabel>
-                        <Select
-                          value={sector}
-                          onChange={handleSectorChange}
-                          label="Sector"
-                        >
-                          <MenuItem value="">
-                            <em>All Sectors</em>
-                          </MenuItem>
-                          {sectors.map((sector) => (
-                            <MenuItem key={sector} value={sector}>{sector}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Industry</InputLabel>
-                        <Select
-                          value={industry}
-                          onChange={handleIndustryChange}
-                          label="Industry"
-                        >
-                          <MenuItem value="">
-                            <em>All Industries</em>
-                          </MenuItem>
-                          {industries.map((ind) => (
-                            <MenuItem key={ind} value={ind}>{ind}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={12} sx={{ mt: 2 }}>
-                      <FormControl fullWidth>
-                        <InputLabel>Exchange</InputLabel>
-                        <Select
-                          value={exchange}
-                          onChange={handleExchangeChange}
-                          label="Exchange"
-                        >
-                          <MenuItem value="">
-                            <em>All Exchanges</em>
-                          </MenuItem>
-                          {exchanges.map((ex) => (
-                            <MenuItem key={ex} value={ex}>{ex}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-            </Box>
-          )}
-        </Paper>
-      )}
-      
-      {/* Add the results section for displaying fetched stocks */}
-      {(stocks.length > 0 || loading) && (
-        <Paper sx={{ p: 0, mt: 3, borderRadius: 2, overflow: 'hidden' }}>
-          {/* Results Header */}
-          <Box sx={{ 
-            p: 2, 
-            bgcolor: 'background.paper', 
-            borderBottom: '1px solid', 
-            borderColor: 'divider',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                p: 1,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-                borderRadius: 2,
-                mr: 2
-              }}>
-                {loading ? (
-                  <CircularProgress size={20} sx={{ mr: 1 }} />
-                ) : (
-                  <BarChartIcon color="primary" sx={{ mr: 1 }} />
                 )}
-                <Typography variant="h6" sx={{ fontWeight: 500 }}>
-                  Results
+                
+                {selectedFilterTab === 'change' && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={changeFilterType}
+                        exclusive
+                        onChange={handleChangeFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="any">Any Change Range</ToggleButton>
+                        <ToggleButton value="up">% Up Only</ToggleButton>
+                        <ToggleButton value="down">% Down Only</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {changeFilterType === "any" && (
+                        <>
+                          <Typography gutterBottom>
+                            Change %: {changeRange[0]}% to {changeRange[1]}%
+                          </Typography>
+                          <Slider
+                            value={changeRange}
+                            onChange={handleChangeRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPercentage}
+                            min={-200}
+                            max={200}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {changeFilterType === "up" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Change"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Change"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {changeFilterType === "down" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Down"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Down"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === 'volume' && (
+                  <Box sx={{ p: 1 }}>
+                    <Typography id="volume-range-slider" gutterBottom>
+                      Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                    </Typography>
+                    <Slider
+                      value={volumeRange}
+                      onChange={handleVolumeRangeChange}
+                      valueLabelFormat={formatVolume}
+                      valueLabelDisplay="auto"
+                      min={0}
+                      max={100000000}
+                      step={1000000}
+                      sx={{ width: '100%' }}
+                    />
+                  </Box>
+                )}
+                
+                {selectedFilterTab === 'sector' && (
+                  <Box sx={{ p: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Sector</InputLabel>
+                          <Select
+                            value={sector}
+                            onChange={handleSectorChange}
+                            label="Sector"
+                          >
+                            <MenuItem value="">
+                              <em>All Sectors</em>
+                            </MenuItem>
+                            {sectors.map((sector) => (
+                              <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Industry</InputLabel>
+                          <Select
+                            value={industry}
+                            onChange={handleIndustryChange}
+                            label="Industry"
+                          >
+                            <MenuItem value="">
+                              <em>All Industries</em>
+                            </MenuItem>
+                            {industries.map((industryOption) => (
+                              <MenuItem key={industryOption} value={industryOption}>
+                                {industryOption}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      {/* Add Exchange Selection */}
+                      <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                        <FormControl fullWidth>
+                          <InputLabel>Exchange</InputLabel>
+                          <Select
+                            value={exchange}
+                            onChange={handleExchangeChange}
+                            label="Exchange"
+                          >
+                            <MenuItem value="">
+                              <em>All Exchanges</em>
+                            </MenuItem>
+                            {exchanges.map((ex) => (
+                              <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+        )}
+        
+        {/* Negative Candles Screener */}
+        {showNegativeCandles && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6">Consecutive Negative Candles Screener</Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This screener finds stocks that have {numCandles} consecutive negative candles (close &lt; open) on the {timeframe} timeframe.
+              These stocks may be in a strong downtrend and could present trading opportunities.
+            </Alert>
+            
+            <Grid container spacing={3}>
+              {/* Timeframe Selection */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Timeframe</InputLabel>
+                  <Select
+                    value={timeframe}
+                    onChange={handleTimeframeChange}
+                    label="Timeframe"
+                  >
+                    <MenuItem value="1m">1 Minute</MenuItem>
+                    <MenuItem value="5m">5 Minutes</MenuItem>
+                    <MenuItem value="15m">15 Minutes</MenuItem>
+                    <MenuItem value="30m">30 Minutes</MenuItem>
+                    <MenuItem value="1h">1 Hour</MenuItem>
+                    <MenuItem value="4h">4 Hours</MenuItem>
+                    <MenuItem value="1d">1 Day</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Number of Candles */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Consecutive Candles</InputLabel>
+                  <Select
+                    value={numCandles}
+                    onChange={handleNumCandlesChange}
+                    label="Consecutive Candles"
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      <MenuItem key={num} value={num}>{num} Candles</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Search Button */}
+              <Grid item xs={12} md={4}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={handleNegativeCandlesSearch}
+                  disabled={loading}
+                  sx={{ height: '56px' }}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Find Stocks'}
+                </Button>
+              </Grid>
+            </Grid>
+            
+            {/* Advanced Filters Toggle - reuse the same advanced filters section as positive candles */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              p: 2, 
+              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+              borderRadius: 2,
+              mb: 2,
+              mt: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Advanced Filters
                 </Typography>
               </Box>
-              
-              {stocks.length > 0 && (
-                <Chip 
-                  label={`${stocks.length} found`} 
-                  size="medium" 
-                  color="primary" 
-                  sx={{ borderRadius: '16px', fontWeight: 500 }} 
-                />
-              )}
+              <Switch 
+                checked={showAdvancedInPC}
+                onChange={(e) => setShowAdvancedInPC(e.target.checked)}
+                color="primary"
+              />
             </Box>
             
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {lastUpdated && (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Updated {lastUpdated.toLocaleTimeString()}
+            {/* Advanced Filters Content - reuse the same content as positive candles */}
+            {showAdvancedInPC && (
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Narrow down stocks:
+                </Typography>
+                
+                <Tabs
+                  value={selectedFilterTab}
+                  onChange={handleFilterTabChange}
+                  indicatorColor="primary"
+                  textColor="primary"
+                  variant="standard"
+                  sx={{ mb: 2 }}
+                >
+                  <Tab label="Price" value="price" />
+                  <Tab label="Change %" value="change" />
+                  <Tab label="Volume" value="volume" />
+                  <Tab label="Sector" value="sector" />
+                </Tabs>
+                
+                {selectedFilterTab === "price" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={priceFilterType}
+                        exclusive
+                        onChange={handlePriceFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="range">Price Range</ToggleButton>
+                        <ToggleButton value="above">Above Price</ToggleButton>
+                        <ToggleButton value="below">Below Price</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {priceFilterType === "range" && (
+                        <>
+                          <Typography gutterBottom>
+                            Price Range: ${priceRange[0]} to ${priceRange[1]}
+                          </Typography>
+                          <Slider
+                            value={priceRange}
+                            onChange={handlePriceRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPrice}
+                            min={0}
+                            max={2000}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {priceFilterType === "above" && (
+                        <TextField
+                          label="Price Above"
+                          type="number"
+                          value={priceAbove}
+                          onChange={(e) => setPriceAbove(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                      
+                      {priceFilterType === "below" && (
+                        <TextField
+                          label="Price Below"
+                          type="number"
+                          value={priceBelow}
+                          onChange={(e) => setPriceBelow(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "change" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={changeFilterType}
+                        exclusive
+                        onChange={handleChangeFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="any">Any Change Range</ToggleButton>
+                        <ToggleButton value="up">% Up Only</ToggleButton>
+                        <ToggleButton value="down">% Down Only</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {changeFilterType === "any" && (
+                        <>
+                          <Typography gutterBottom>
+                            Change %: {changeRange[0]}% to {changeRange[1]}%
+                          </Typography>
+                          <Slider
+                            value={changeRange}
+                            onChange={handleChangeRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPercentage}
+                            min={-200}
+                            max={200}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {changeFilterType === "up" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Change"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Change"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {changeFilterType === "down" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Down"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Down"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "volume" && (
+                  <Box>
+                    <Typography gutterBottom>
+                      Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                    </Typography>
+                    <Slider
+                      value={volumeRange}
+                      onChange={handleVolumeRangeChange}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={formatVolume}
+                      min={1000}
+                      max={100000000}
+                      step={10000}
+                      scale={(x) => x}
+                    />
+                    
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Min Volume"
+                          type="number"
+                          value={volumeRange[0]}
+                          onChange={(e) => handleVolumeInputChange(0, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Max Volume"
+                          type="number"
+                          value={volumeRange[1]}
+                          onChange={(e) => handleVolumeInputChange(1, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "sector" && (
+                  <Box sx={{ p: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Sector</InputLabel>
+                          <Select
+                            value={sector}
+                            onChange={handleSectorChange}
+                            label="Sector"
+                          >
+                            <MenuItem value="">
+                              <em>All Sectors</em>
+                            </MenuItem>
+                            {sectors.map((sector) => (
+                              <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Industry</InputLabel>
+                          <Select
+                            value={industry}
+                            onChange={handleIndustryChange}
+                            label="Industry"
+                          >
+                            <MenuItem value="">
+                              <em>All Industries</em>
+                            </MenuItem>
+                            {industries.map((industryOption) => (
+                              <MenuItem key={industryOption} value={industryOption}>
+                                {industryOption}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                        <FormControl fullWidth>
+                          <InputLabel>Exchange</InputLabel>
+                          <Select
+                            value={exchange}
+                            onChange={handleExchangeChange}
+                            label="Exchange"
+                          >
+                            <MenuItem value="">
+                              <em>All Exchanges</em>
+                            </MenuItem>
+                            {exchanges.map((ex) => (
+                              <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+        )}
+        
+        {/* Above Previous Day High Screener */}
+        {showPrevDayHighCross && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6">Stocks Above Previous Day High Screener</Typography>
+            </Box>
+            
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This screener finds stocks that have their current price crossing above the previous day's high.
+              This can signal increased momentum and potential breakout opportunities.
+            </Alert>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Finds stocks currently trading above their previous day's high
+                  </Typography>
+                </Paper>
+              </Grid>
+              
+              {/* Search Button */}
+              <Grid item xs={12} md={4}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={handlePrevDayHighCrossSearch}
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
+                  sx={{ height: '56px' }}
+                >
+                  {loading ? 'Searching...' : 'Find Stocks'}
+                </Button>
+              </Grid>
+            </Grid>
+            
+            {/* Advanced Filters Toggle */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              p: 2, 
+              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+              borderRadius: 2,
+              mb: 2,
+              mt: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Advanced Filters
+                </Typography>
+              </Box>
+              <Switch 
+                checked={showAdvancedInPDHC}
+                onChange={(e) => setShowAdvancedInPDHC(e.target.checked)}
+                color="primary"
+              />
+            </Box>
+            
+            {/* Advanced Filters Content - reuse the same content as positive candles */}
+            {showAdvancedInPDHC && (
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Narrow down stocks:
+                </Typography>
+                
+                <Tabs
+                  value={selectedFilterTab}
+                  onChange={handleFilterTabChange}
+                  indicatorColor="primary"
+                  textColor="primary"
+                  variant="standard"
+                  sx={{ mb: 2 }}
+                >
+                  <Tab label="Price" value="price" />
+                  <Tab label="Change %" value="change" />
+                  <Tab label="Volume" value="volume" />
+                  <Tab label="Sector" value="sector" />
+                </Tabs>
+                
+                {selectedFilterTab === "price" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={priceFilterType}
+                        exclusive
+                        onChange={handlePriceFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="range">Price Range</ToggleButton>
+                        <ToggleButton value="above">Above Price</ToggleButton>
+                        <ToggleButton value="below">Below Price</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {priceFilterType === "range" && (
+                        <>
+                          <Typography gutterBottom>
+                            Price Range: ${priceRange[0]} to ${priceRange[1]}
+                          </Typography>
+                          <Slider
+                            value={priceRange}
+                            onChange={handlePriceRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPrice}
+                            min={0}
+                            max={2000}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {priceFilterType === "above" && (
+                        <TextField
+                          label="Price Above"
+                          type="number"
+                          value={priceAbove}
+                          onChange={(e) => setPriceAbove(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                      
+                      {priceFilterType === "below" && (
+                        <TextField
+                          label="Price Below"
+                          type="number"
+                          value={priceBelow}
+                          onChange={(e) => setPriceBelow(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "change" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={changeFilterType}
+                        exclusive
+                        onChange={handleChangeFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="any">Any Change Range</ToggleButton>
+                        <ToggleButton value="up">% Up Only</ToggleButton>
+                        <ToggleButton value="down">% Down Only</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {changeFilterType === "any" && (
+                        <>
+                          <Typography gutterBottom>
+                            Change %: {changeRange[0]}% to {changeRange[1]}%
+                          </Typography>
+                          <Slider
+                            value={changeRange}
+                            onChange={handleChangeRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPercentage}
+                            min={-200}
+                            max={200}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {changeFilterType === "up" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Change"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Change"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {changeFilterType === "down" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Down"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Down"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                
+                {selectedFilterTab === "volume" && (
+                  <Box>
+                    <Typography gutterBottom>
+                      Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                    </Typography>
+                    <Slider
+                      value={volumeRange}
+                      onChange={handleVolumeRangeChange}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={formatVolume}
+                      min={1000}
+                      max={100000000}
+                      step={10000}
+                      scale={(x) => x}
+                    />
+                    
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Min Volume"
+                          type="number"
+                          value={volumeRange[0]}
+                          onChange={(e) => handleVolumeInputChange(0, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Max Volume"
+                          type="number"
+                          value={volumeRange[1]}
+                          onChange={(e) => handleVolumeInputChange(1, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "sector" && (
+                  <Box sx={{ p: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Sector</InputLabel>
+                          <Select
+                            value={sector}
+                            onChange={handleSectorChange}
+                            label="Sector"
+                          >
+                            <MenuItem value="">
+                              <em>All Sectors</em>
+                            </MenuItem>
+                            {sectors.map((sector) => (
+                              <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Industry</InputLabel>
+                          <Select
+                            value={industry}
+                            onChange={handleIndustryChange}
+                            label="Industry"
+                          >
+                            <MenuItem value="">
+                              <em>All Industries</em>
+                            </MenuItem>
+                            {industries.map((ind) => (
+                              <MenuItem key={ind} value={ind}>{ind}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                        <FormControl fullWidth>
+                          <InputLabel>Exchange</InputLabel>
+                          <Select
+                            value={exchange}
+                            onChange={handleExchangeChange}
+                            label="Exchange"
+                          >
+                            <MenuItem value="">
+                              <em>All Exchanges</em>
+                            </MenuItem>
+                            {exchanges.map((ex) => (
+                              <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+        )}
+        
+        {/* Below Previous Day Low Screener */}
+        {showPrevDayLowCross && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6">Stocks Below Previous Day Low Screener</Typography>
+            </Box>
+            
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This screener finds stocks that have their current price below the previous day's low.
+              This can signal increased downward momentum and potential breakdown opportunities.
+            </Alert>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Finds stocks currently trading below their previous day's low
+                  </Typography>
+                </Paper>
+              </Grid>
+              
+              {/* Search Button */}
+              <Grid item xs={12} md={4}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={handlePrevDayLowCrossSearch}
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
+                  sx={{ height: '56px' }}
+                >
+                  {loading ? 'Searching...' : 'Find Stocks'}
+                </Button>
+              </Grid>
+            </Grid>
+            
+            {/* Advanced Filters Toggle */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              p: 2, 
+              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+              borderRadius: 2,
+              mb: 2,
+              mt: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Advanced Filters
+                </Typography>
+              </Box>
+              <Switch 
+                checked={showAdvancedInPDHC}
+                onChange={(e) => setShowAdvancedInPDHC(e.target.checked)}
+                color="primary"
+              />
+            </Box>
+            
+            {/* Advanced Filters Content - reuse the same content as Previous Day High Cross */}
+            {showAdvancedInPDHC && (
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Narrow down stocks:
+                </Typography>
+                
+                <Tabs
+                  value={selectedFilterTab}
+                  onChange={handleFilterTabChange}
+                  indicatorColor="primary"
+                  textColor="primary"
+                  variant="standard"
+                  sx={{ mb: 2 }}
+                >
+                  <Tab label="Price" value="price" />
+                  <Tab label="Change %" value="change" />
+                  <Tab label="Volume" value="volume" />
+                  <Tab label="Sector" value="sector" />
+                </Tabs>
+                
+                {selectedFilterTab === "price" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={priceFilterType}
+                        exclusive
+                        onChange={handlePriceFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="range">Price Range</ToggleButton>
+                        <ToggleButton value="above">Above Price</ToggleButton>
+                        <ToggleButton value="below">Below Price</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {priceFilterType === "range" && (
+                        <>
+                          <Typography gutterBottom>
+                            Price Range: ${priceRange[0]} to ${priceRange[1]}
+                          </Typography>
+                          <Slider
+                            value={priceRange}
+                            onChange={handlePriceRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPrice}
+                            min={0}
+                            max={2000}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {priceFilterType === "above" && (
+                        <TextField
+                          label="Price Above"
+                          type="number"
+                          value={priceAbove}
+                          onChange={(e) => setPriceAbove(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                      
+                      {priceFilterType === "below" && (
+                        <TextField
+                          label="Price Below"
+                          type="number"
+                          value={priceBelow}
+                          onChange={(e) => setPriceBelow(Number(e.target.value))}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "change" && (
+                  <Box>
+                    <Box sx={{ mb: 3 }}>
+                      <ToggleButtonGroup
+                        value={changeFilterType}
+                        exclusive
+                        onChange={handleChangeFilterTypeChange}
+                        fullWidth
+                        color="primary"
+                        sx={{ mb: 2 }}
+                      >
+                        <ToggleButton value="any">Any Change Range</ToggleButton>
+                        <ToggleButton value="up">% Up Only</ToggleButton>
+                        <ToggleButton value="down">% Down Only</ToggleButton>
+                      </ToggleButtonGroup>
+                      
+                      {changeFilterType === "any" && (
+                        <>
+                          <Typography gutterBottom>
+                            Change %: {changeRange[0]}% to {changeRange[1]}%
+                          </Typography>
+                          <Slider
+                            value={changeRange}
+                            onChange={handleChangeRangeChange}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={formatPercentage}
+                            min={-200}
+                            max={200}
+                            sx={{ mt: 1 }}
+                          />
+                        </>
+                      )}
+                      
+                      {changeFilterType === "up" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Change"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Change"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {changeFilterType === "down" && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Minimum % Down"
+                              type="number"
+                              value={changeMin}
+                              onChange={(e) => setChangeMin(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              label="Maximum % Down"
+                              type="number"
+                              value={changeMax}
+                              onChange={(e) => setChangeMax(Number(e.target.value))}
+                              fullWidth
+                              InputProps={{
+                                endAdornment: <Typography>%</Typography>,
+                                inputProps: { min: 0 }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "volume" && (
+                  <Box>
+                    <Typography gutterBottom>
+                      Volume Range: {formatVolume(volumeRange[0])} to {formatVolume(volumeRange[1])}
+                    </Typography>
+                    <Slider
+                      value={volumeRange}
+                      onChange={handleVolumeRangeChange}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={formatVolume}
+                      min={1000}
+                      max={100000000}
+                      step={10000}
+                      scale={(x) => x}
+                    />
+                    
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Min Volume"
+                          type="number"
+                          value={volumeRange[0]}
+                          onChange={(e) => handleVolumeInputChange(0, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Max Volume"
+                          type="number"
+                          value={volumeRange[1]}
+                          onChange={(e) => handleVolumeInputChange(1, e)}
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 0 }
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+                
+                {selectedFilterTab === "sector" && (
+                  <Box sx={{ p: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Sector</InputLabel>
+                          <Select
+                            value={sector}
+                            onChange={handleSectorChange}
+                            label="Sector"
+                          >
+                            <MenuItem value="">
+                              <em>All Sectors</em>
+                            </MenuItem>
+                            {sectors.map((sector) => (
+                              <MenuItem key={sector} value={sector}>{sector}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Industry</InputLabel>
+                          <Select
+                            value={industry}
+                            onChange={handleIndustryChange}
+                            label="Industry"
+                          >
+                            <MenuItem value="">
+                              <em>All Industries</em>
+                            </MenuItem>
+                            {industries.map((ind) => (
+                              <MenuItem key={ind} value={ind}>{ind}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={12} sx={{ mt: 2 }}>
+                        <FormControl fullWidth>
+                          <InputLabel>Exchange</InputLabel>
+                          <Select
+                            value={exchange}
+                            onChange={handleExchangeChange}
+                            label="Exchange"
+                          >
+                            <MenuItem value="">
+                              <em>All Exchanges</em>
+                            </MenuItem>
+                            {exchanges.map((ex) => (
+                              <MenuItem key={ex} value={ex}>{ex}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+        )}
+        
+        {/* Add the results section for displaying fetched stocks */}
+        {(stocks.length > 0 || loading) && (
+          <Paper sx={{ p: 0, mt: 3, borderRadius: 2, overflow: 'hidden' }}>
+            {/* Results Header */}
+            <Box sx={{ 
+              p: 2, 
+              bgcolor: 'background.paper', 
+              borderBottom: '1px solid', 
+              borderColor: 'divider',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  p: 1,
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                  borderRadius: 2,
+                  mr: 2
+                }}>
+                  {loading ? (
+                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                  ) : (
+                    <BarChartIcon color="primary" sx={{ mr: 1 }} />
+                  )}
+                  <Typography variant="h6" sx={{ fontWeight: 500 }}>
+                    Results
                   </Typography>
                 </Box>
-              )}
+                
+                {stocks.length > 0 && (
+                  <Chip 
+                    label={`${stocks.length} found`} 
+                    size="medium" 
+                    color="primary" 
+                    sx={{ borderRadius: '16px', fontWeight: 500 }} 
+                  />
+                )}
+              </Box>
               
-              <Button 
-                variant="outlined" 
-                startIcon={<RefreshIcon />} 
-                onClick={refreshData}
-                size="small"
-                sx={{ borderRadius: 8 }}
-              >
-                Refresh
-              </Button>
-            </Box>
-          </Box>
-          
-          {/* Results Table */}
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-              <CircularProgress />
-              <Typography variant="body1" color="text.secondary" sx={{ ml: 2 }}>
-                Loading stocks...
-              </Typography>
-            </Box>
-          ) : stocks.length > 0 ? (
-            <Box sx={{ p: 0 }}>
-              <TableContainer component={Box}>
-                <Table size="medium">
-                  <TableHead>
-                    <TableRow sx={{ 
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                    }}>
-                      <TableCell sx={{ fontWeight: 600, py: 1.5 }}>Symbol</TableCell>
-                      <TableCell sx={{ fontWeight: 600, py: 1.5 }}>Name</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Price</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Change %</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Volume</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Sector</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, py: 1.5 }}>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {stocks.map((stock) => (
-                      <TableRow 
-                        key={stock.symbol || `stock-${Math.random()}`}
-                        hover
-                        sx={{
-                          '&:last-child td, &:last-child th': { border: 0 },
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s',
-                          '&:hover': {
-                            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                          }
-                        }}
-                        onClick={() => navigateToStockDetails(stock.symbol)}
-                      >
-                        <TableCell component="th" scope="row" sx={{ py: 2 }}>
-                          <Typography fontWeight="bold">{stock.symbol || 'N/A'}</Typography>
-                        </TableCell>
-                        <TableCell sx={{ py: 2 }}>{stock.name || 'N/A'}</TableCell>
-                        <TableCell align="right" sx={{ py: 2 }}>
-                          {(() => {
-                            // Just use the already formatted price from our processedStocks
-                            return stock.price || 'N/A';
-                          })()}
-                        </TableCell>
-                        <TableCell 
-                          align="right"
-                          sx={{ 
-                            py: 2,
-                            color: (() => {
-                              // Parse change percentage to determine color
-                              const changeText = stock.change_percent || '';
-                              if (changeText.includes('-')) return 'error.main';
-                              if (changeText.includes('+') || changeText.match(/[0-9]/)) return 'success.main';
-                              return 'text.primary';
-                            })()
-                          }}
-                        >
-                          {stock.change_percent || 'N/A'}
-                        </TableCell>
-                        <TableCell align="right" sx={{ py: 2 }}>
-                          {stock.volume || 'N/A'}
-                        </TableCell>
-                        <TableCell align="right" sx={{ py: 2 }}>
-                          <Chip 
-                            label={stock.sector || 'N/A'} 
-                            size="small" 
-                            sx={{ 
-                              borderRadius: '12px',
-                              bgcolor: (theme) => 
-                                stock.sector ? (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)') 
-                                  : 'transparent'
-                            }} 
-                          />
-                        </TableCell>
-                        <TableCell align="center" sx={{ py: 2 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                            <Tooltip title="Set alerts">
-                              <IconButton 
-                                size="small" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigateToAlerts(stock.symbol);
-                                }}
-                                color="primary"
-                                sx={{ bgcolor: 'rgba(63, 81, 181, 0.08)' }}
-                              >
-                                <NotificationsIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="View on Yahoo Finance">
-                              <IconButton 
-                                size="small" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(`https://finance.yahoo.com/quote/${stock.symbol}`, '_blank');
-                                }}
-                                color="secondary"
-                                sx={{ bgcolor: 'rgba(245, 0, 87, 0.08)' }}
-                              >
-                                <OpenInNewIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          ) : (
-            <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <SearchOffIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                No stocks found
-              </Typography>
-              <Typography variant="body2" color="text.secondary" align="center" sx={{ maxWidth: 500 }}>
-                Try adjusting your search criteria or filters to find more stocks.
-              </Typography>
-              <Button 
-                variant="outlined" 
-                startIcon={<FilterListIcon />} 
-                sx={{ mt: 2 }}
-                onClick={() => {
-                  if (showPositiveCandles) {
-                    setShowAdvancedInPC(true);
-                  } else if (showPrevDayHighCross) {
-                    setShowAdvancedInPDHC(true);
-                  }
-                }}
-              >
-                Adjust Filters
-              </Button>
-            </Box>
-          )}
-          
-          {/* Debug section - only show if needed */}
-          {rawStocksData.length > 0 && (
-            <Box sx={{ mt: 4, borderTop: '1px dashed #ccc', pt: 4, px: 3, pb: 3 }}>
-              <Accordion sx={{ 
-                boxShadow: 'none',
-                '&:before': { display: 'none' },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                mb: 2,
-              }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle2" color="primary">
-                    Debug Information
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Box sx={{ fontSize: '0.85rem' }}>
-                    <pre style={{ whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: '300px', backgroundColor: '#f5f5f5', padding: 16, borderRadius: 4 }}>
-                      {JSON.stringify(rawStocksData[0], null, 2)}
-                    </pre>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {lastUpdated && (
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Updated {lastUpdated.toLocaleTimeString()}
+                    </Typography>
                   </Box>
-                </AccordionDetails>
-              </Accordion>
-              
-              <Typography variant="caption" color="text.secondary">
-                This debug information is only visible during development.
-              </Typography>
+                )}
+                
+                <Button 
+                  variant="outlined" 
+                  startIcon={<RefreshIcon />} 
+                  onClick={refreshData}
+                  size="small"
+                  sx={{ borderRadius: 8 }}
+                >
+                  Refresh
+                </Button>
+              </Box>
             </Box>
-          )}
-        </Paper>
-      )}
-      
-      {/* Show error message if there's an error */}
-      {error && (
-        <Alert severity="error" sx={{ mt: 3 }}>
-          {error}
-        </Alert>
-      )}
-    </Container>
+            
+            {/* Results Table */}
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+                <CircularProgress />
+                <Typography variant="body1" color="text.secondary" sx={{ ml: 2 }}>
+                  Loading stocks...
+                </Typography>
+              </Box>
+            ) : stocks.length > 0 ? (
+              <Box sx={{ p: 0 }}>
+                <TableContainer component={Box}>
+                  <Table size="medium">
+                    <TableHead>
+                      <TableRow sx={{ 
+                        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                      }}>
+                        <TableCell sx={{ fontWeight: 600, py: 1.5 }}>Symbol</TableCell>
+                        <TableCell sx={{ fontWeight: 600, py: 1.5 }}>Name</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Price</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Change %</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Volume</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Sector</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 600, py: 1.5 }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {stocks.map((stock) => (
+                        <TableRow 
+                          key={stock.symbol || `stock-${Math.random()}`}
+                          hover
+                          sx={{
+                            '&:last-child td, &:last-child th': { border: 0 },
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s',
+                            '&:hover': {
+                              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                            }
+                          }}
+                          onClick={() => navigateToStockDetails(stock.symbol)}
+                        >
+                          <TableCell component="th" scope="row" sx={{ py: 2 }}>
+                            <Typography fontWeight="bold">{stock.symbol || 'N/A'}</Typography>
+                          </TableCell>
+                          <TableCell sx={{ py: 2 }}>{stock.name || 'N/A'}</TableCell>
+                          <TableCell align="right" sx={{ py: 2 }}>
+                            {(() => {
+                              // Just use the already formatted price from our processedStocks
+                              return stock.price || 'N/A';
+                            })()}
+                          </TableCell>
+                          <TableCell 
+                            align="right"
+                            sx={{ 
+                              py: 2,
+                              color: (() => {
+                                // Parse change percentage to determine color
+                                const changeText = stock.change_percent || '';
+                                if (changeText.includes('-')) return 'error.main';
+                                if (changeText.includes('+') || changeText.match(/[0-9]/)) return 'success.main';
+                                return 'text.primary';
+                              })()
+                            }}
+                          >
+                            {stock.change_percent || 'N/A'}
+                          </TableCell>
+                          <TableCell align="right" sx={{ py: 2 }}>
+                            {stock.volume || 'N/A'}
+                          </TableCell>
+                          <TableCell align="right" sx={{ py: 2 }}>
+                            <Chip 
+                              label={stock.sector || 'N/A'} 
+                              size="small" 
+                              sx={{ 
+                                borderRadius: '12px',
+                                bgcolor: (theme) => 
+                                  stock.sector ? (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)') 
+                                    : 'transparent'
+                              }} 
+                            />
+                          </TableCell>
+                          <TableCell align="center" sx={{ py: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                              <Tooltip title="Set alerts">
+                                <IconButton 
+                                  size="small" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateToAlerts(stock.symbol);
+                                  }}
+                                  color="primary"
+                                  sx={{ bgcolor: 'rgba(63, 81, 181, 0.08)' }}
+                                >
+                                  <NotificationsIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="View on Yahoo Finance">
+                                <IconButton 
+                                  size="small" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(`https://finance.yahoo.com/quote/${stock.symbol}`, '_blank');
+                                  }}
+                                  color="secondary"
+                                  sx={{ bgcolor: 'rgba(245, 0, 87, 0.08)' }}
+                                >
+                                  <OpenInNewIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            ) : (
+              <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <SearchOffIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  No stocks found
+                </Typography>
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ maxWidth: 500 }}>
+                  Try adjusting your search criteria or filters to find more stocks.
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  startIcon={<FilterListIcon />} 
+                  sx={{ mt: 2 }}
+                  onClick={() => {
+                    if (showPositiveCandles) {
+                      setShowAdvancedInPC(true);
+                    } else if (showPrevDayHighCross) {
+                      setShowAdvancedInPDHC(true);
+                    }
+                  }}
+                >
+                  Adjust Filters
+                </Button>
+              </Box>
+            )}
+            
+            {/* Debug section - only show if needed */}
+            {rawStocksData.length > 0 && (
+              <Box sx={{ mt: 4, borderTop: '1px dashed #ccc', pt: 4, px: 3, pb: 3 }}>
+                <Accordion sx={{ 
+                  boxShadow: 'none',
+                  '&:before': { display: 'none' },
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  mb: 2,
+                }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="subtitle2" color="primary">
+                      Debug Information
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ fontSize: '0.85rem' }}>
+                      <pre style={{ whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: '300px', backgroundColor: '#f5f5f5', padding: 16, borderRadius: 4 }}>
+                        {JSON.stringify(rawStocksData[0], null, 2)}
+                      </pre>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+                
+                <Typography variant="caption" color="text.secondary">
+                  This debug information is only visible during development.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        )}
+        
+        {/* Show error message if there's an error */}
+        {error && (
+          <Alert severity="error" sx={{ mt: 3 }}>
+            {error}
+          </Alert>
+        )}
+      </Box>
+    </Box>
   );
 };
 
