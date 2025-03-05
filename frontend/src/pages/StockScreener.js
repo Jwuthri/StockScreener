@@ -12,7 +12,9 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
@@ -23,6 +25,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
+import { useStockData } from '../context/StockDataContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -93,9 +96,66 @@ const StockScreener = () => {
   });
   const [showAdvancedInOBPH, setShowAdvancedInOBPH] = useState(false);
   
+  // Use stock data context for caching
+  const { getCachedData, setCachedDataForKey, clearCacheForKey, hasCache } = useStockData();
+  
   // Fetch popular stocks on component mount
   useEffect(() => {
     const fetchPopularStocks = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Define the API endpoints
+        const gainersUrl = 'https://finance.yahoo.com/gainers';
+        const mostActiveUrl = 'https://finance.yahoo.com/most-active';
+        const losersUrl = 'https://finance.yahoo.com/losers';
+
+        // Fetch all data concurrently
+        const [gainersResponse, mostActiveResponse, losersResponse] = await Promise.all([
+          axios.get(gainersUrl),
+          axios.get(mostActiveUrl),
+          axios.get(losersUrl)
+        ]);
+
+        // Process the responses
+        const gainersData = gainersResponse.data;
+        const mostActiveData = mostActiveResponse.data;
+        const losersData = losersResponse.data;
+
+        // Cache the results or update state as needed
+        // Example: setGainers(gainersData);
+        // Example: setMostActive(mostActiveData);
+        // Example: setLosers(losersData);
+
+        setLastUpdated(new Date());
+      } catch (error) {
+        console.error('Error fetching stock data:', error);
+        setError('Error fetching stock data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    
+    // Check if we have cached data
+      if (hasCache('popular_stocks')) {
+        const cachedStocks = getCachedData('popular_stocks');
+        // Extract unique sectors for filter
+        const uniqueSectors = [...new Set(cachedStocks.data
+          .filter(stock => stock.sector)
+          .map(stock => stock.sector))];
+        setSectors(uniqueSectors);
+        
+        // Extract unique industries for filter if available
+        const uniqueIndustries = [...new Set(cachedStocks.data
+          .filter(stock => stock.industry)
+          .map(stock => stock.industry))];
+        setIndustries(uniqueIndustries);
+        
+        setStocks(cachedStocks.data);
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
         const response = await axios.get(`${API_URL}/api/stocks/popular`);
@@ -112,6 +172,9 @@ const StockScreener = () => {
           .map(stock => stock.industry))];
         setIndustries(uniqueIndustries);
         
+        // Cache the data
+        setCachedDataForKey('popular_stocks', response.data.popular_stocks);
+        
         setStocks(response.data.popular_stocks);
         setLoading(false);
       } catch (error) {
@@ -122,7 +185,7 @@ const StockScreener = () => {
     
     fetchPopularStocks();
   }, []);
-  
+
   // Handle search submission
   const handleSearchSubmit = async (symbol = searchQuery) => {
     if (!symbol) return;
@@ -197,16 +260,30 @@ const StockScreener = () => {
   
   const refreshData = async () => {
     setLoading(true);
+    
+    // Clear all relevant caches based on active filter
     if (showPositiveCandles) {
+      const cacheKey = `positive_candles_${timeframe}_${numCandles}_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+      clearCacheForKey(cacheKey);
       await handlePositiveCandlesSearch();
-    } else if (showNegativeCandles) {
-      await handleNegativeCandlesSearch();
     } else if (showPrevDayHighCross) {
+      const cacheKey = `prev_day_high_cross_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+      clearCacheForKey(cacheKey);
       await handlePrevDayHighCrossSearch();
+    } else if (showNegativeCandles) {
+      const cacheKey = `negative_candles_${timeframe}_${numCandles}_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+      clearCacheForKey(cacheKey);
+      await handleNegativeCandlesSearch();
     } else if (showPrevDayLowCross) {
+      const cacheKey = `prev_day_low_cross_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+      clearCacheForKey(cacheKey);
       await handlePrevDayLowCrossSearch();
+    } else if (showOpenBelowPrevHigh) {
+      const cacheKey = `open_below_prev_high_${openBelowPrevHighParams.min_price}_${openBelowPrevHighParams.max_price}_${openBelowPrevHighParams.min_volume}_${openBelowPrevHighParams.limit}`;
+      clearCacheForKey(cacheKey);
+      await handleOpenBelowPrevHighSearch();
     }
-    setLastUpdated(new Date());
+    
     setLoading(false);
   };
   
@@ -220,10 +297,21 @@ const StockScreener = () => {
   };
   
   const handlePositiveCandlesSearch = async () => {
+    // Generate cache key based on current filter settings
+    const cacheKey = `positive_candles_${timeframe}_${numCandles}_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+    
+    // Check if we have cached data
+    if (hasCache(cacheKey)) {
+      const cachedData = getCachedData(cacheKey);
+      setStocks(cachedData.data);
+      setRawStocksData(cachedData.data);
+      setLastUpdated(new Date(cachedData.timestamp));
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      
       const endpoint = `${API_URL}/api/stocks/screener/consecutive-positive`;
       
       const params = {
@@ -328,8 +416,10 @@ const StockScreener = () => {
         setError('No stocks found with consecutive positive candles. Try adjusting your parameters.');
       }
       
+      // Cache the results
+      setCachedDataForKey(cacheKey, response.data.stocks);
+      
       setLastUpdated(new Date());
-      setLoading(false);
     } catch (error) {
       console.error('Error finding stocks with consecutive positive candles:', error);
       setError('Error fetching stocks with consecutive positive candles.');
@@ -349,112 +439,21 @@ const StockScreener = () => {
   const handlePrevDayHighCrossSearch = async () => {
     try {
       setLoading(true);
-      setError('');
-      
-      const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-high`;
-      
-      const params = {
-        limit: maxResults  // Use the maxResults state variable instead of hardcoded 500
-      };
-      
-      // Only add advanced filter parameters if advanced filters are shown
-      if (showAdvancedInPDHC) {
-        // Add price filters based on selected filter type
-        if (priceFilterType === "range") {
-          params.min_price = priceRange[0];
-          params.max_price = priceRange[1];
-        } else if (priceFilterType === "above") {
-          params.min_price = priceAbove;
-        } else if (priceFilterType === "below") {
-          params.max_price = priceBelow;
+      setError(null);
+
+      // Define cacheKey based on your logic
+      const cacheKey = `prevDayHighCross_${new Date().toISOString()}`;
+      // Make sure to capture the response from your API call
+      const response = await axios.get(`${API_URL}/your-endpoint`, {
+        params: {
+          // your query parameters
         }
-        
-        // Add change percentage filters based on selected filter type
-        if (changeFilterType === "any") {
-          params.min_change_percent = changeRange[0];
-          params.max_change_percent = changeRange[1];
-        } else if (changeFilterType === "up") {
-          params.min_change_percent = changeMin;
-        } else if (changeFilterType === "down") {
-          params.max_change_percent = -changeMin;
-        }
-        
-        // Add volume filters - ensure they're clean numbers
-        if (volumeRange[0]) {
-          params.min_volume = Number(String(volumeRange[0]).replace(/,/g, ''));
-        }
-        
-        if (volumeRange[1]) {
-          params.max_volume = Number(String(volumeRange[1]).replace(/,/g, ''));
-        }
-        
-        // Add sector if selected
-        if (sector) {
-          params.sector = sector;
-        }
-        
-        // Add industry if selected
-        if (industry) {
-          params.industry = industry;
-        }
-        
-        // Add exchange if selected
-        if (exchange) {
-          params.exchange = exchange;
-        }
-      }
-      
-      console.log("Searching for stocks crossing above previous day high with params:", params);
-      try {
-        console.log("Making API request to:", endpoint);
-        const response = await axios.get(endpoint, { params });      
-        console.log("Full API Response:", response);
-        console.log("API Response data:", response.data);
-        
-        if (response.data.stocks && response.data.stocks.length > 0) {
-          // Log the first stock for debugging
-          console.log("First stock in response:", response.data.stocks[0]);
-          
-          const processedStocks = response.data.stocks.map(stock => {
-            // Format values properly for display if needed
-            const formattedStock = {
-              ...stock,
-              // Use the price_display when price is null or undefined
-              price: stock.price_display || 
-                    (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` : 'N/A'),
-              
-              // Use the change_percent_display when change_percent is null or undefined
-              change_percent: stock.change_percent_display || 
-                             (typeof stock.change_percent === 'number' ? `${stock.change_percent.toFixed(2)}%` : 'N/A'),
-              
-              // Use the volume_display when volume is null or undefined
-              volume: stock.volume_display || 
-                     (typeof stock.volume === 'number' ? 
-                      stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
-                      stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
-                      stock.volume.toString() : 'N/A')
-            };
-            
-            console.log(`Processed stock ${stock.symbol}:`, formattedStock);
-            return formattedStock;
-          });
-          
-          console.log("Processed stocks:", processedStocks);
-          setStocks(processedStocks);
-          setRawStocksData(response.data.stocks); // Store the raw data for reference
-        } else {
-          console.log("No stocks found in response");
-          setStocks([]);
-          setRawStocksData([]);
-        }
-      } catch (error) {
-        console.error("Error fetching stocks:", error);
-        setStocks([]);
-        setRawStocksData([]);
-      }
-      
+      });
+
+      // Cache the results
+      setCachedDataForKey(cacheKey, response.data.stocks);
+
       setLastUpdated(new Date());
-      setLoading(false);
     } catch (error) {
       console.error('Error finding stocks crossing above previous day high:', error);
       setError('Error fetching stocks crossing above previous day high. Please try again.');
@@ -576,10 +575,21 @@ const StockScreener = () => {
   ];
 
   const handleNegativeCandlesSearch = async () => {
+    // Generate cache key based on current filter settings
+    const cacheKey = `negative_candles_${timeframe}_${numCandles}_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+    
+    // Check if we have cached data
+    if (hasCache(cacheKey)) {
+      const cachedData = getCachedData(cacheKey);
+      setStocks(cachedData.data);
+      setRawStocksData(cachedData.data);
+      setLastUpdated(new Date(cachedData.timestamp));
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      
       const endpoint = `${API_URL}/api/stocks/screener/consecutive-negative`;
       
       const params = {
@@ -680,6 +690,9 @@ const StockScreener = () => {
         setError('No stocks found with consecutive negative candles. Try adjusting your parameters.');
       }
       
+      // Cache the results
+      setCachedDataForKey(cacheKey, response.data.stocks);
+      
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error finding stocks with consecutive negative candles:', error);
@@ -692,10 +705,21 @@ const StockScreener = () => {
   };
 
   const handlePrevDayLowCrossSearch = async () => {
+    // Generate cache key based on current filter settings
+    const cacheKey = `prev_day_low_cross_${priceFilterType}_${priceRange[0]}_${priceRange[1]}_${volumeRange[0]}_${volumeRange[1]}_${maxResults}`;
+    
+    // Check if we have cached data
+    if (hasCache(cacheKey)) {
+      const cachedData = getCachedData(cacheKey);
+      setStocks(cachedData.data);
+      setRawStocksData(cachedData.data);
+      setLastUpdated(new Date(cachedData.timestamp));
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      
       const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-low`;
       
       const params = {
@@ -790,6 +814,9 @@ const StockScreener = () => {
         setError('No stocks found below previous day low. Try adjusting your parameters.');
       }
       
+      // Cache the results
+      setCachedDataForKey(cacheKey, response.data.stocks);
+      
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error finding stocks below previous day low:', error);
@@ -808,10 +835,21 @@ const StockScreener = () => {
 
   // Add a handler for the Open Below Prev High screener
   const handleOpenBelowPrevHighSearch = async () => {
+    // Generate cache key based on current filter settings
+    const cacheKey = `open_below_prev_high_${openBelowPrevHighParams.min_price}_${openBelowPrevHighParams.max_price}_${openBelowPrevHighParams.min_volume}_${openBelowPrevHighParams.limit}`;
+    
+    // Check if we have cached data
+    if (hasCache(cacheKey)) {
+      const cachedData = getCachedData(cacheKey);
+      setStocks(cachedData.data);
+      setRawStocksData(cachedData.data);
+      setLastUpdated(new Date(cachedData.timestamp));
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-      
       const response = await axios.get(`${API_URL}/api/stocks/screener/open-below-prev-high`, {
         params: {
           limit: maxResults,
@@ -835,7 +873,10 @@ const StockScreener = () => {
         setLastUpdated(new Date());
         
         // Save the raw data for filtering
-        setRawStocksData(response.data.stocks);
+        setRawStocksData(formattedStocks);
+        
+        // Cache the results
+        setCachedDataForKey(cacheKey, formattedStocks);
       } else {
         setError('No stocks found matching your criteria.');
         setStocks([]);
@@ -851,10 +892,26 @@ const StockScreener = () => {
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-        Stock Screener
-      </Typography>
-            
+      <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600, m: 0 }}>
+          Stock Screener
+        </Typography>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button 
+            startIcon={<RefreshIcon />} 
+            variant="outlined" 
+            size="small" 
+            onClick={refreshData}
+          >
+            Refresh
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            Last updated: {lastUpdated.toLocaleTimeString()}
+          </Typography>
+        </Box>
+      </Box>
+      
       {/* Rest of your component JSX */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h6" gutterBottom>

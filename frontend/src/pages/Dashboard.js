@@ -3,20 +3,22 @@ import {
   Box, Typography, Grid, Paper, Card, CardContent, 
   CardHeader, Divider, List, ListItem, ListItemText, 
   ListItemAvatar, Avatar, CircularProgress, Button,
-  Tabs, Tab, Alert, Container, Chip
+  Tabs, Tab, Alert, Container, Chip, IconButton, Tooltip
 } from '@mui/material';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { 
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend, ResponsiveContainer 
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Link } from 'react-router-dom';
+import { useStockData } from '../context/StockDataContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -33,6 +35,9 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [usingDemoData, setUsingDemoData] = useState(false);
   const [stockLimit, setStockLimit] = useState(10);
+  
+  // Use the stock data context for caching
+  const { getCachedData, setCachedDataForKey, hasCache } = useStockData();
   
   // Parse the filter from URL query parameters
   const urlParams = new URLSearchParams(location.search);
@@ -59,6 +64,35 @@ const Dashboard = () => {
   }, [stockLimit]);
   
   const fetchDashboardData = async () => {
+    // Check if we have cached data that's still valid
+    const gainersKey = `gainers_${stockLimit}`;
+    const losersKey = `losers_${stockLimit}`;
+    const mostActiveKey = `most_active_${stockLimit}`;
+    
+    // Use the hasCache method for cleaner code
+    const hasGainersCache = hasCache(gainersKey);
+    const hasLosersCache = hasCache(losersKey);
+    const hasMostActiveCache = hasCache(mostActiveKey);
+    
+    // If we have all the cached data, use it and don't make API calls
+    if (hasGainersCache && hasLosersCache && hasMostActiveCache) {
+      const cachedGainers = getCachedData(gainersKey);
+      const cachedLosers = getCachedData(losersKey);
+      const cachedMostActive = getCachedData(mostActiveKey);
+      
+      setTopGainers(cachedGainers.data);
+      setTopLosers(cachedLosers.data);
+      setMostActive(cachedMostActive.data);
+      setLastUpdated(new Date(Math.max(
+        new Date(cachedGainers.timestamp),
+        new Date(cachedLosers.timestamp),
+        new Date(cachedMostActive.timestamp)
+      )));
+      setLoading(false);
+      return;
+    }
+    
+    // Otherwise, fetch the data
     setLoading(true);
     setError('');
     
@@ -110,6 +144,11 @@ const Dashboard = () => {
       const processedLosers = processStockData(losersRes.data.losers || []);
       const processedActive = processStockData(activeRes.data.most_active || []);
       
+      // Cache the processed data
+      setCachedDataForKey(gainersKey, processedGainers);
+      setCachedDataForKey(losersKey, processedLosers);
+      setCachedDataForKey(mostActiveKey, processedActive);
+      
       setTopGainers(processedGainers);
       setTopLosers(processedLosers);
       setMostActive(processedActive);
@@ -130,6 +169,13 @@ const Dashboard = () => {
   };
   
   const refreshData = () => {
+    // Clear the cache for all data types and fetch fresh data
+    const gainersKey = `gainers_${stockLimit}`;
+    const losersKey = `losers_${stockLimit}`;
+    const mostActiveKey = `most_active_${stockLimit}`;
+    
+    // We don't need to explicitly clear cache since fetchDashboardData
+    // will overwrite the existing cache entries
     fetchDashboardData();
   };
   
@@ -271,6 +317,7 @@ const Dashboard = () => {
                 value="most-active" 
               />
             </Tabs>
+            
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="body2" sx={{ mr: 1 }}>Show:</Typography>
@@ -291,14 +338,14 @@ const Dashboard = () => {
                   <option value={50}>50</option>
                 </select>
               </Box>
-              <Button 
-                startIcon={<RefreshIcon />} 
-                size="small" 
-                onClick={refreshData}
-                variant="outlined"
-              >
-                Refresh
-              </Button>
+              <Tooltip title="Refresh data">
+                <IconButton onClick={refreshData} size="small" color="primary">
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </Typography>
             </Box>
           </Box>
         </Grid>

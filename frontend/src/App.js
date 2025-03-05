@@ -4,6 +4,8 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
 import theme from './theme';
+import { StockDataProvider } from './context/StockDataContext';
+import CacheDebugger from './components/CacheDebugger';
 
 // Layout components
 import Navbar from './components/Navbar';
@@ -61,6 +63,7 @@ const AuthenticatedLayout = ({ children }) => (
         {children}
       </Box>
     </Box>
+    <CacheDebugger />
   </Box>
 );
 
@@ -68,46 +71,48 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+      <StockDataProvider>
+        <Router>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* Protected routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <AuthenticatedLayout>
-                <Dashboard />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/stock/:symbol" element={
-            <ProtectedRoute>
-              <AuthenticatedLayout>
-                <StockDetail />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/screener" element={
-            <ProtectedRoute>
-              <AuthenticatedLayout>
-                <StockScreener />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/alerts" element={
-            <ProtectedRoute>
-              <AuthenticatedLayout>
-                <Alerts />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          } />
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <AuthenticatedLayout>
+                  <Dashboard />
+                </AuthenticatedLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/stock/:symbol" element={
+              <ProtectedRoute>
+                <AuthenticatedLayout>
+                  <StockDetail />
+                </AuthenticatedLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/screener" element={
+              <ProtectedRoute>
+                <AuthenticatedLayout>
+                  <StockScreener />
+                </AuthenticatedLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/alerts" element={
+              <ProtectedRoute>
+                <AuthenticatedLayout>
+                  <Alerts />
+                </AuthenticatedLayout>
+              </ProtectedRoute>
+            } />
 
-          {/* Redirect all other routes to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+            {/* Redirect all other routes to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </StockDataProvider>
     </ThemeProvider>
   );
 }

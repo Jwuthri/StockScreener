@@ -585,21 +585,6 @@ async def get_stocks_open_below_prev_high_endpoint(
             min_volume=min_volume
         )
 
-        # # Make sure the response data is serializable
-        # for stock in stocks:
-        #     # Ensure diff_percent and change_percent are simple floats
-        #     try:
-        #         stock['diff_percent'] = float(stock['diff_percent'])
-        #     except (ValueError, TypeError):
-        #         stock['diff_percent'] = 0.0
-                
-        #     try:
-        #         stock['change_percent'] = float(stock['change_percent'])
-        #     except (ValueError, TypeError):
-        #         stock['change_percent'] = 0.0
-        
-        # logger.info(f"Returning {len(stocks)} stocks with open below previous day high")
-        
         return {
             "stocks": stocks[:limit],
             "count": len(stocks[:limit]),
