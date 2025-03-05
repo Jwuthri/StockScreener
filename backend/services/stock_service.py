@@ -1,12 +1,13 @@
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-from backend.models.database import Stock, PriceHistory, db
+from backend.models.database import Stock, PriceHistory, db_session, get_db
 import logging
 import requests
 from bs4 import BeautifulSoup
 import time
 import random
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -85,28 +86,38 @@ def get_current_price(symbol):
 def save_stock_to_db(stock_data):
     """Save or update stock information in the database."""
     try:
-        with db.atomic():
-            stock, created = Stock.get_or_create(
-                symbol=stock_data['symbol'],
-                defaults={
-                    'name': stock_data['name'],
-                    'sector': stock_data.get('sector'),
-                    'industry': stock_data.get('industry'),
-                    'last_updated': datetime.now()
-                }
-            )
+        db = db_session()
+        try:
+            # Check if stock exists
+            stock = db.query(Stock).filter(Stock.symbol == stock_data['symbol']).first()
             
-            if not created:
+            if not stock:
+                # Create new stock
+                stock = Stock(
+                    symbol=stock_data['symbol'],
+                    name=stock_data['name'],
+                    sector=stock_data.get('sector'),
+                    industry=stock_data.get('industry'),
+                    last_updated=datetime.now()
+                )
+                db.add(stock)
+            else:
                 # Update existing stock
                 stock.name = stock_data['name']
                 stock.sector = stock_data.get('sector')
                 stock.industry = stock_data.get('industry')
                 stock.last_updated = datetime.now()
-                stock.save()
-                
+            
+            db.commit()
             return stock
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error saving stock data: {str(e)}")
+            return None
+        finally:
+            db.close()
     except Exception as e:
-        logger.error(f"Error saving stock data: {str(e)}")
+        logger.error(f"Error with database session: {str(e)}")
         return None
 
 def save_price_history(stock, history_data):
@@ -118,19 +129,27 @@ def save_price_history(stock, history_data):
 def search_stocks(query):
     """Search for stocks by symbol or name."""
     try:
-        stocks = Stock.select().where(
-            (Stock.symbol.contains(query.upper())) | 
-            (Stock.name.contains(query))
-        )
-        return [
-            {
-                'symbol': stock.symbol,
-                'name': stock.name,
-                'sector': stock.sector,
-                'industry': stock.industry
-            }
-            for stock in stocks
-        ]
+        db = db_session()
+        try:
+            stocks = db.query(Stock).filter(
+                or_(
+                    Stock.symbol.contains(query.upper()),
+                    Stock.name.contains(query)
+                )
+            ).all()
+            
+            result = [
+                {
+                    'symbol': stock.symbol,
+                    'name': stock.name,
+                    'sector': stock.sector,
+                    'industry': stock.industry
+                }
+                for stock in stocks
+            ]
+            return result
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"Error searching stocks: {str(e)}")
         return []

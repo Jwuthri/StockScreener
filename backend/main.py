@@ -10,7 +10,8 @@ if os.path.basename(os.getcwd()) == "backend":
 from api.stock_routes import router as stock_router
 from backend.api.alert_routes import router as alert_router
 from backend.api.auth_routes import router as auth_router
-from backend.models.database import initialize_db
+from backend.models.database import initialize_db, engine, Base, db_session
+from sqlalchemy.orm import Session
 from backend.services.alert_service import alert_manager
 import asyncio
 import logging
@@ -123,21 +124,25 @@ app.include_router(alert_router, prefix="/api/alerts", tags=["alerts"])
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and start alert monitoring."""
-    # Initialize the database
+    """Initialize the database and start background tasks."""
+    logger.info("Starting application")
+    # Initialize database
     initialize_db()
     
-    # Start services in background tasks
+    # Start alert monitoring
     asyncio.create_task(alert_manager.start_monitoring())
-    # Disable the periodic_stock_screener to improve performance
-    # asyncio.create_task(periodic_stock_screener())
-    logger.info("Stock Screener API started successfully")
+    
+    # Start periodic background tasks
+    asyncio.create_task(periodic_stock_screener())
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop alert monitoring."""
+    """Shutdown tasks and close db connections."""
+    logger.info("Shutting down application")
     alert_manager.stop_monitoring()
-    logger.info("Alert monitoring stopped")
+    
+    # Close any outstanding SQLAlchemy sessions
+    db_session.remove()
 
 @app.get("/")
 async def root():

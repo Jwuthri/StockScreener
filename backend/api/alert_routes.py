@@ -11,7 +11,8 @@ from backend.services.alert_service import (
     PERCENT_CHANGE
 )
 from backend.api.auth_routes import get_current_user
-from backend.models.database import Alert, User
+from backend.models.database import Alert, User, db_session, get_db
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
