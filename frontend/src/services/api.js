@@ -121,4 +121,30 @@ export const getAlertTypes = async () => {
   }
 };
 
+export const getStocksOpenBelowPrevHigh = async (params = {}) => {
+  try {
+    // Set default params
+    const defaultParams = {
+      limit: 50,
+      min_price: 0.25,
+      max_price: 10.0,
+      min_volume: 250000
+    };
+
+    // Merge default params with provided params
+    const queryParams = { ...defaultParams, ...params };
+    
+    // Build query string
+    const queryString = Object.entries(queryParams)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('&');
+    
+    const response = await api.get(`/api/stocks/screener/open-below-prev-high?${queryString}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching stocks with open below previous day high:', error);
+    throw error;
+  }
+};
+
 export default api; 

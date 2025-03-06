@@ -16,7 +16,6 @@ from backend.services.stock_service import (
 from backend.models.database import Stock
 from typing import List, Optional
 import logging
-from backend.services.polygon_service import get_stocks_with_filters
 from backend.services.tradingview_service import (
     get_top_gainers as get_top_gainers_tv,
     get_top_losers as get_top_losers_tv,
@@ -28,7 +27,8 @@ from backend.services.tradingview_service import (
     get_first_five_min_candle,
     get_stocks_with_consecutive_positive_candles,
     get_stocks_with_consecutive_negative_candles,
-    get_stocks_crossing_prev_day_high
+    get_stocks_crossing_prev_day_high,
+    get_stocks_with_open_below_prev_day_high
 )
 
 router = APIRouter()
@@ -183,42 +183,6 @@ async def filter_stocks(
         limit=limit
     )
     return {"stocks": stocks}
-
-@router.get("/polygon/filter")
-async def filter_stocks_polygon(
-    min_price: float = Query(None, description="Minimum stock price"),
-    max_price: float = Query(None, description="Maximum stock price"),
-    min_change: float = Query(None, description="Minimum percentage change"),
-    max_change: float = Query(None, description="Maximum percentage change"),
-    min_volume: int = Query(None, description="Minimum trading volume"),
-    sector: str = Query(None, description="Filter by sector"),
-    limit: int = Query(50, ge=1, le=100, description="Number of results to return")
-):
-    """Filter stocks based on various criteria using Polygon.io API"""
-    from backend.services.polygon_service import get_stocks_with_filters
-    
-    results = get_stocks_with_filters(
-        min_price=min_price, 
-        max_price=max_price,
-        min_change_percent=min_change,
-        max_change_percent=max_change,
-        min_volume=min_volume,
-        sector=sector,
-        limit=limit
-    )
-    
-    return {"results": results}
-
-@router.get("/polygon/details/{symbol}")
-async def get_polygon_stock_details(symbol: str):
-    """Get detailed information about a stock using Polygon.io API"""
-    from backend.services.polygon_service import get_ticker_details
-    
-    details = get_ticker_details(symbol)
-    if not details:
-        raise HTTPException(status_code=404, detail=f"Stock {symbol} details not found")
-    
-    return details
 
 @router.get("/debug/tv-fields")
 async def debug_tradingview_fields():
@@ -595,4 +559,54 @@ async def get_stocks_crossing_prev_day_low_endpoint(
         return {"stocks": filtered_stocks[:limit]}
     except Exception as e:
         logger.error(f"Error screening for stocks crossing previous day low: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
+
+@router.get("/screener/open-below-prev-high")
+async def get_stocks_open_below_prev_high_endpoint(
+    limit: int = Query(50, ge=1, le=10_000, description="Maximum number of stocks to return"),
+    min_price: float = Query(0.25, description="Minimum stock price"),
+    max_price: float = Query(10.0, description="Maximum stock price"),
+    batch_size: int = Query(250, description="Number of stocks to process in each batch"),
+    min_volume: int = Query(250_000, description="Minimum volume filter")
+):
+    """
+    Get stocks where the current day's open price is below the previous day's high.
+    This can identify potential stocks that opened in a buyable range below resistance.
+    """
+    try:
+        logger.info(f"Screening for stocks with open below previous day high (limit: {limit})")
+        
+        # Call the service function with the provided parameters
+        stocks = get_stocks_with_open_below_prev_day_high(
+            limit=limit,
+            min_price=min_price,
+            max_price=max_price,
+            batch_size=batch_size,
+            min_volume=min_volume
+        )
+
+        # # Make sure the response data is serializable
+        # for stock in stocks:
+        #     # Ensure diff_percent and change_percent are simple floats
+        #     try:
+        #         stock['diff_percent'] = float(stock['diff_percent'])
+        #     except (ValueError, TypeError):
+        #         stock['diff_percent'] = 0.0
+                
+        #     try:
+        #         stock['change_percent'] = float(stock['change_percent'])
+        #     except (ValueError, TypeError):
+        #         stock['change_percent'] = 0.0
+        
+        # logger.info(f"Returning {len(stocks)} stocks with open below previous day high")
+        
+        return {
+            "stocks": stocks[:limit],
+            "count": len(stocks[:limit]),
+            "min_price": min_price,
+            "max_price": max_price,
+            "min_volume": min_volume
+        }
+    except Exception as e:
+        logger.error(f"Error screening for stocks with open below previous day high: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}") 

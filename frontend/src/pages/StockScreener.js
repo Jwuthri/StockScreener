@@ -83,6 +83,16 @@ const StockScreener = () => {
   // Add a new state variable for result limit
   const [maxResults, setMaxResults] = useState(15);
   
+  // Add state for the new Open Below Prev High screener
+  const [showOpenBelowPrevHigh, setShowOpenBelowPrevHigh] = useState(false);
+  const [openBelowPrevHighParams, setOpenBelowPrevHighParams] = useState({
+    min_price: 0.25,
+    max_price: 10.0,
+    min_volume: 250000,
+    limit: 50
+  });
+  const [showAdvancedInOBPH, setShowAdvancedInOBPH] = useState(false);
+  
   // Fetch popular stocks on component mount
   useEffect(() => {
     const fetchPopularStocks = async () => {
@@ -201,27 +211,13 @@ const StockScreener = () => {
   };
   
   const formatPercentage = (value) => {
-    // If already formatted (includes % or starts with + or -), return as is
-    if (typeof value === 'string' && (value.includes('%') || value.startsWith('+') || value.startsWith('-'))) {
-        return value;
-    }
+    // Check if the value is "N/A" or null/undefined
+    if (value === "N/A" || value == null) return "N/A";
     
-    // Return N/A for null or undefined
-    if (value === null || value === undefined) {
-        return 'N/A';
-    }
-    
-    // Convert to number if not already
-    const numValue = typeof value === 'number' ? value : parseFloat(value);
-    
-    // If not a number, show N/A
-    if (isNaN(numValue)) {
-        return 'N/A';
-    }
-    
-    // Format with sign and 2 decimal places
-    return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`;
-};
+    // Parse the string to a number and format to 2 decimal places with % sign
+    const num = parseFloat(value);
+    return isNaN(num) ? "N/A" : `${num.toFixed(2)}%`;
+  };
   
   const handlePositiveCandlesSearch = async () => {
     try {
@@ -542,26 +538,12 @@ const StockScreener = () => {
   
   // Format price for display
   const formatPrice = (value) => {
-    // If already formatted (includes $ or currency formatting), return as is
-    if (typeof value === 'string' && (value.includes('$') || value.includes('£') || value.includes('€'))) {
-      return value;
-    }
+    // Check if the value is "N/A" or null/undefined
+    if (value === "N/A" || value == null) return "N/A";
     
-    // Return N/A for null or undefined
-    if (value === null || value === undefined) {
-      return 'N/A';
-    }
-    
-    // Convert to number if not already
-    const numValue = typeof value === 'number' ? value : Number(value);
-    
-    // If not a number, show N/A
-    if (isNaN(numValue)) {
-      return 'N/A';
-    }
-    
-    // Format with dollar sign and 2 decimal places
-    return `$${numValue.toFixed(2)}`;
+    // Parse the string to a number and format to 2 decimal places with $ sign
+    const num = parseFloat(value);
+    return isNaN(num) ? "N/A" : `$${num.toFixed(2)}`;
   };
   
   // Add a handler for the results limit slider
@@ -823,6 +805,49 @@ const StockScreener = () => {
     // Initial data fetch
     // fetchPopularStocks();
   }, []);
+
+  // Add a handler for the Open Below Prev High screener
+  const handleOpenBelowPrevHighSearch = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await axios.get(`${API_URL}/api/stocks/screener/open-below-prev-high`, {
+        params: {
+          limit: maxResults,
+          min_price: openBelowPrevHighParams.min_price,
+          max_price: openBelowPrevHighParams.max_price,
+          min_volume: openBelowPrevHighParams.min_volume
+        }
+      });
+      
+      if (response.data && response.data.stocks) {
+        const formattedStocks = response.data.stocks.map(stock => ({
+          ...stock,
+          price: formatPrice(stock.current_price),
+          change: `${formatPercentage(stock.change_percent)}`,
+          difference: `${formatPercentage(stock.diff_percent)}`,
+          open: formatPrice(stock.open_price),
+          prevHigh: formatPrice(stock.prev_day_high)
+        }));
+        
+        setStocks(formattedStocks);
+        setLastUpdated(new Date());
+        
+        // Save the raw data for filtering
+        setRawStocksData(response.data.stocks);
+      } else {
+        setError('No stocks found matching your criteria.');
+        setStocks([]);
+      }
+    } catch (error) {
+      console.error('Error fetching stocks with open below previous day high:', error);
+      setError('Error fetching stocks. Please try again later.');
+      setStocks([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -2503,6 +2528,16 @@ const StockScreener = () => {
                         <TableCell sx={{ fontWeight: 600, py: 1.5 }}>Name</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Price</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Change %</TableCell>
+                        
+                        {/* Add conditional columns for Open Below Prev High screener */}
+                        {showOpenBelowPrevHigh && (
+                          <>
+                            <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Open</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Prev High</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Diff %</TableCell>
+                          </>
+                        )}
+                        
                         <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Volume</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600, py: 1.5 }}>Sector</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 600, py: 1.5 }}>Actions</TableCell>
@@ -2546,8 +2581,30 @@ const StockScreener = () => {
                               })()
                             }}
                           >
-                            {stock.change_percent || 'N/A'}
+                            {stock.change_percent ? `${stock.change_percent}%` : 'N/A'}
                           </TableCell>
+                          
+                          {/* Add conditional cells for Open Below Prev High screener */}
+                          {showOpenBelowPrevHigh && (
+                            <>
+                              <TableCell align="right" sx={{ py: 2 }}>
+                                {stock.open_price || 'N/A'}
+                              </TableCell>
+                              <TableCell align="right" sx={{ py: 2 }}>
+                                {stock.prev_day_high || 'N/A'}
+                              </TableCell>
+                              <TableCell 
+                                align="right" 
+                                sx={{ 
+                                  py: 2,
+                                  color: 'info.main'
+                                }}
+                              >
+                                {stock.diff_percent ? `${stock.diff_percent}%` : 'N/A'}
+                              </TableCell>
+                            </>
+                          )}
+                          
                           <TableCell align="right" sx={{ py: 2 }}>
                             {stock.volume || 'N/A'}
                           </TableCell>
@@ -2665,6 +2722,117 @@ const StockScreener = () => {
           </Alert>
         )}
       </Box>
+      
+      {/* Add the Open Below Previous Day High Screener */}
+      <Accordion 
+        expanded={showOpenBelowPrevHigh} 
+        onChange={() => setShowOpenBelowPrevHigh(!showOpenBelowPrevHigh)}
+        sx={{ mb: 2 }}
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+            <ShowChartIcon sx={{ mr: 1 }} />
+            Stocks With Open Below Previous Day High
+            <Chip 
+              label="New" 
+              color="primary" 
+              size="small" 
+              sx={{ ml: 1, height: 20 }} 
+            />
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Typography gutterBottom>
+            Find stocks where the current day's opening price is below the previous day's high.
+            This can identify potential buying opportunities for stocks that opened in a good entry range.
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Price Range
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TextField
+                    size="small"
+                    label="Min $"
+                    type="number"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    value={openBelowPrevHighParams.min_price}
+                    onChange={(e) => setOpenBelowPrevHighParams({
+                      ...openBelowPrevHighParams,
+                      min_price: parseFloat(e.target.value)
+                    })}
+                    sx={{ width: '100%' }}
+                  />
+                  <Typography variant="body2">to</Typography>
+                  <TextField
+                    size="small"
+                    label="Max $"
+                    type="number"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    value={openBelowPrevHighParams.max_price}
+                    onChange={(e) => setOpenBelowPrevHighParams({
+                      ...openBelowPrevHighParams,
+                      max_price: parseFloat(e.target.value)
+                    })}
+                    sx={{ width: '100%' }}
+                  />
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} md={3}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Min Volume
+                </Typography>
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 0, step: 10000 }}
+                  value={openBelowPrevHighParams.min_volume}
+                  onChange={(e) => setOpenBelowPrevHighParams({
+                    ...openBelowPrevHighParams,
+                    min_volume: parseInt(e.target.value)
+                  })}
+                  sx={{ width: '100%' }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} md={3}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Results Limit
+                </Typography>
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 1, max: 100, step: 1 }}
+                  value={maxResults}
+                  onChange={(e) => setMaxResults(parseInt(e.target.value))}
+                  sx={{ width: '100%' }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} md={3}>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  onClick={handleOpenBelowPrevHighSearch}
+                  startIcon={<SearchIcon />}
+                  sx={{ mt: 3, width: '100%' }}
+                >
+                  Find Stocks
+                </Button>
+              </Grid>
+            </Grid>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              This screener looks for stocks where the open price is below the previous day's high.
+              The difference percentage shows how far below the previous day high the stock opened.
+            </Typography>
+          </Box>
+        </AccordionDetails>
+      </Accordion>
     </Box>
   );
 };

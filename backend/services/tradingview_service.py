@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.traceback import install
 from enum import Enum
 import json
-
+from tqdm import tqdm
 
 # Define Interval enum that was missing
 class Interval(Enum):
@@ -358,6 +358,7 @@ def get_stocks_with_filters(
         # Build query conditions with the correct field names
         conditions = []
         
+        conditions.append(col('exchange').isin(['NASDAQ', 'NYSE']))
         if min_price is not None:
             conditions.append(col('close') >= min_price)
         if max_price is not None:
@@ -374,8 +375,7 @@ def get_stocks_with_filters(
             conditions.append(col('sector') == sector)
         
         # Query TradingView with filters
-        query = Query().select('name', 'close', 'change_abs', 'change', 
-                              'volume', 'description', 'market_cap_basic')
+        query = Query().select('name', 'close', 'open', 'high', 'low', 'change_abs', 'change', 'exchange', 'volume', 'description', 'market_cap_basic')
         
         # Add conditions if there are any
         if conditions:
@@ -383,14 +383,14 @@ def get_stocks_with_filters(
             
         # Set limit and execute
         count, df = query.limit(limit).get_scanner_data(cookies=tv_cookies)
-        
+
         if df.empty:
             logger.warning("No stocks found matching the criteria")
             return []
             
         # Format the results
         filtered_stocks = []
-        for _, row in df.iterrows():
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing stocks"):
             try:
                 # Extract the symbol after the exchange prefix
                 symbol = row.get('name')
@@ -431,10 +431,10 @@ def get_stocks_with_consecutive_positive_candles(timeframe: str = "1d", num_cand
         
         # Get initial list of stocks to check
         count, stock_df = (Query()
-            .select('name', 'close', 'change_abs', 'change', 'volume', 'description', 'exchange', 'market_cap_basic')
+            .select('name', 'close', 'change_abs', 'change', 'volume', 'description', 'exchange', 'market_cap_basic', 'VWAP', 'MACD.macd', 'RSI', 'EMA5', 'EMA20')
             .where(col('volume') > 250_000)  # Higher volume filter for more reliable results
             .where(col('exchange').isin(['NASDAQ', 'NYSE']))
-            .limit(50)  # Check more stocks for better chance of finding consecutive candles
+            .limit(100)  # Check more stocks for better chance of finding consecutive candles
             .get_scanner_data(cookies=tv_cookies))
             
         if stock_df.empty:
@@ -1628,4 +1628,238 @@ def get_first_five_min_candle(symbol: str) -> Dict[str, Any]:
             "first_5min_volume": None
         }
 
+def get_stocks_with_open_below_prev_day_high(limit: int = 100, 
+                                      min_price: float = 0.25, 
+                                      max_price: float = 10,
+                                      batch_size: int = 250,
+                                      min_volume: int = 250_000) -> List[Dict[str, Any]]:
+    """
+    Get stocks where the current day's open price is below the previous day's high.
+    Uses batching to process a larger number of stocks.
+    
+    Args:
+        limit: Maximum number of stocks to return
+        min_price: Minimum stock price filter
+        max_price: Maximum stock price filter
+        batch_size: Number of stocks to process in each batch
+        min_volume: Minimum volume filter
+        
+    Returns:
+        List of dictionaries containing stock information
+    """
+    from backend.models.database import PriceHistory, Stock, db_session
+    try:
+        logger.info(f"Screening for stocks with open price below previous day high (limit: {limit})")
+        logger.info(f"Price range: ${min_price} to ${max_price}, Min volume: {min_volume}")
+        
+        # Get cookies for TradingView
+        tv_cookies = get_cookies_from_browser()
+        
+        # List to store stocks where open is below previous day high
+        open_below_prev_high_stocks = []
+        count, stock_df = (
+            Query().select('name', 'open', 'close', 'high', 'low', 'change', 'volume', 'description', 'exchange', 'market_cap_basic')
+            .where(col('active_symbol') == True)
+            .where(col('close') < max_price)
+            .where(col('exchange').isin(['NASDAQ']))
+            .order_by('close', ascending=True)
+            .limit(5000)
+            .get_scanner_data(cookies=tv_cookies))
 
+        if stock_df.empty:
+            logger.info("No more stocks found in this batch, stopping")
+            return []
+        
+        previous_day_data = db_session().query(PriceHistory, Stock).join(Stock, PriceHistory.stock_id == Stock.id).filter(PriceHistory.date == datetime.now().strftime('%Y/%m/%d')).all()
+        data = []
+        for price_history, stock in previous_day_data:
+            record = {
+                # Price history fields
+                'price_id': price_history.id,
+                'timeframe': price_history.timeframe,
+                'open': price_history.open,
+                'high': price_history.high,
+                'low': price_history.low,
+                'close': price_history.close,
+                'volume': price_history.volume,
+                'date': price_history.date,
+                
+                # Stock fields
+                'stock_id': stock.id,
+                'symbol': stock.symbol,
+                'name': stock.name,
+                'sector': stock.sector,
+                'industry': stock.industry
+            }
+            data.append(record)
+
+        # Create DataFrame
+        df = pd.DataFrame(data)
+        
+        # Create a dictionary for quick lookups of previous day data by symbol
+        previous_day_lookup = {}
+        for _, row in df.iterrows():
+            symbol = row['name']
+            previous_day_lookup[symbol] = {
+                'previous_day_high': row['high'],
+                'previous_day_close': row['close'],
+                'previous_day_open': row['open'],
+                'previous_day_low': row['low'],
+                'previous_day_volume': row['volume']
+            }
+        
+        for _, stock in tqdm(stock_df.iterrows(), total=len(stock_df), desc="Processing stocks"):
+            symbol = stock.get('name')
+            
+            # Skip stocks with missing names
+            if not symbol:
+                continue
+                
+            # Check volume requirement only if volume exists
+            volume = stock.get("volume")
+            if volume is not None and volume < min_volume:
+                continue
+
+            try:
+                # Get current day's price data, handling possible null values
+                current_open = stock.get('open')
+                current_open = float(current_open) if current_open is not None else None
+                
+                current_price = stock.get('close') 
+                current_price = float(current_price) if current_price is not None else None
+                
+                # Get previous day data
+                prev_day = previous_day_lookup.get(symbol, {})
+                prev_day_high = prev_day.get('previous_day_high')
+                
+                # Only apply price filtering criteria if we have valid price data
+                if current_price is not None and (current_price < min_price or current_price > max_price):
+                    continue
+                
+                # Modified logic to handle null values in price data
+                include_stock = False
+                
+                # If both open and prev_day_high have values, check if open is below prev high
+                if current_open is not None and prev_day_high is not None:
+                    if current_open < prev_day_high:
+                        include_stock = True
+                        diff_percent = ((prev_day_high - current_open) / prev_day_high) * 100
+                else:
+                    # Include stocks with missing price data (like in your screenshot)
+                    include_stock = True
+                    diff_percent = None
+                
+                if include_stock:
+                    # Handle null values for change_percent
+                    try:
+                        change_percent = float(stock.get('change', 0))
+                    except (TypeError, ValueError):
+                        change_percent = None
+                    
+                    # Get all the data we want to return
+                    stock_data = {
+                        'symbol': symbol,
+                        'name': stock.get('description', symbol),
+                        'open_price': str(current_open),
+                        'prev_day_high': str(prev_day_high),
+                        'diff_percent': str(round(diff_percent, 2)),
+                        'current_price': str(current_price),
+                        'change_percent': str(round(change_percent, 2)),
+                        'volume': format_volume(stock.get('volume', 0)),
+                        'market_cap': format_market_cap(stock.get('market_cap_basic', 0)),
+                        'exchange': stock.get('exchange', '')
+                    }
+                    
+                    if current_open is not None and prev_day_high is not None:
+                        logger.info(f"✓ Stock {symbol} open below previous day high: {current_open} < {prev_day_high}")
+                    else:
+                        logger.info(f"✓ Stock {symbol} included with incomplete price data")
+                    
+                    open_below_prev_high_stocks.append(stock_data)
+
+            except Exception as e:
+                logger.warning(f"Error processing stock {symbol}: {str(e)}")
+                continue
+         
+        # Sort results by diff_percent (largest difference first)
+        if open_below_prev_high_stocks:  # Only sort if the list is not empty
+            open_below_prev_high_stocks.sort(key=lambda x: x['diff_percent'], reverse=False)
+        
+        return open_below_prev_high_stocks
+        
+    except Exception as e:
+        logger.error(f"Error screening for stocks with open below previous day high: {str(e)}")
+        return []
+
+
+def get_stocks_with_filters_no_post_filters(
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    date: Optional[str] = None,
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    Get stocks filtered by various criteria using TradingView API.
+    
+    Args:
+        min_price: Minimum stock price
+        max_price: Maximum stock price
+        min_change_percent: Minimum percentage change
+        max_change_percent: Maximum percentage change
+        min_volume: Minimum trading volume
+        max_volume: Maximum trading volume
+        sector: Stock sector (e.g., "Technology")
+        date: Specific date in YYYY-MM-DD format to get historical data
+        limit: Maximum number of stocks to return
+        
+    Returns:
+        List of dictionaries containing stock information
+    """
+    try:
+        if date:
+            logger.info(f"Fetching filtered stocks for date {date} using TradingView API")
+            # Since TradingView API doesn't directly support historical data for screeners,
+            # we'll return a demo dataset when a date is specified
+            # In a production environment, you would integrate with a historical data provider
+            return get_demo_stocks_for_date(date, limit)
+        
+        logger.info("Fetching filtered stocks using TradingView API")
+        
+        # Build query conditions with the correct field names
+        conditions = []
+        
+        conditions.append(col('exchange').isin(['NASDAQ', 'NYSE']))
+        if min_price is not None:
+            conditions.append(col('close') >= min_price)
+        if max_price is not None:
+            conditions.append(col('close') <= max_price)
+        if min_change_percent is not None:
+            conditions.append(col('change') >= min_change_percent)  # No need to divide by 100
+        if max_change_percent is not None:
+            conditions.append(col('change') <= max_change_percent)  # No need to divide by 100
+        if min_volume is not None:
+            conditions.append(col('volume') >= min_volume)
+        if max_volume is not None:
+            conditions.append(col('volume') <= max_volume)
+        if sector is not None:
+            conditions.append(col('sector') == sector)
+        
+        # Query TradingView with filters
+        query = Query().select('name', 'close', 'open', 'high', 'low', 'change_abs', 'change', 'exchange', 'volume', 'description', 'sector', 'industry', 'market_cap_basic')
+        
+        # Add conditions if there are any
+        if conditions:
+            query = query.where(*conditions)
+            
+        # Set limit and execute
+        count, df = query.limit(limit).get_scanner_data(cookies=tv_cookies)
+
+        return df
+    except Exception as e:
+        logger.error(f"Error fetching filtered stocks: {str(e)}")
+        return []

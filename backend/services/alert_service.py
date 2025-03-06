@@ -1,4 +1,4 @@
-from backend.models.database import Alert, Stock, User, db
+from backend.models.database import Alert, Stock, User, db_session as db
 from backend.services.stock_service import get_current_price
 import logging
 from datetime import datetime
@@ -48,7 +48,7 @@ class AlertManager:
     async def check_all_alerts(self):
         """Check all active alerts."""
         try:
-            active_alerts = Alert.select().where(Alert.is_active == True)
+            active_alerts = db.query(Alert).filter(Alert.is_active == True).all()
             for alert in active_alerts:
                 await self.check_alert(alert)
         except Exception as e:
@@ -83,10 +83,9 @@ class AlertManager:
         """Trigger an alert by adding it to the triggered alerts list and updating DB."""
         try:
             # Update the alert in the database
-            with db.atomic():
-                alert.last_triggered = datetime.now()
-                alert.save()
-                
+            alert.last_triggered = datetime.now()
+            db.commit()
+            
             # Convert NumPy values to Python native types
             current_value_native = convert_numpy_types(current_value)
                 
@@ -123,101 +122,110 @@ class AlertManager:
 alert_manager = AlertManager()
 
 def create_alert(stock_symbol: str, user: User, alert_type: str, threshold_value: float):
-    """Create a new stock alert."""
+    """Create a new alert for a user"""
     try:
-        with db.atomic():
-            stock = Stock.get(Stock.symbol == stock_symbol)
-            
-            # Convert threshold value to standard float in case it's a NumPy type
-            threshold_value = convert_numpy_types(threshold_value)
-            
-            alert = Alert.create(
-                stock=stock,
-                user=user,
-                alert_type=alert_type,
-                threshold_value=float(threshold_value),
-                is_active=True,
-                created_at=datetime.now()
-            )
-            
-            return {
-                'id': alert.id,
-                'stock_symbol': stock.symbol,
-                'stock_name': stock.name,
-                'alert_type': alert.alert_type,
-                'threshold_value': convert_numpy_types(alert.threshold_value),
-                'is_active': alert.is_active,
-                'created_at': alert.created_at.isoformat()
-            }
-    except Stock.DoesNotExist:
-        logger.error(f"Stock {stock_symbol} not found")
-        return None
+        # Convert threshold_value to Python native type if needed
+        threshold_value = convert_numpy_types(threshold_value)
+        
+        # Find the stock
+        stock = db.query(Stock).filter(Stock.symbol == stock_symbol).first()
+        if not stock:
+            return {"success": False, "message": f"Stock {stock_symbol} not found"}
+        
+        # Create the alert
+        alert = Alert(
+            user_id=user.id,
+            stock_id=stock.id,
+            alert_type=alert_type,
+            threshold_value=threshold_value,
+            is_active=True,
+            created_at=datetime.now()
+        )
+        
+        db.add(alert)
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Alert created for {stock_symbol}",
+            "alert_id": alert.id
+        }
     except Exception as e:
+        db.rollback()
         logger.error(f"Error creating alert: {str(e)}")
-        return None
+        return {"success": False, "message": f"Failed to create alert: {str(e)}"}
 
 def get_alerts_for_user(user: User):
-    """Get all alerts for a specific user."""
+    """Get all alerts for a user"""
     try:
-        alerts = Alert.select().where(Alert.user == user)
-        return [
-            {
-                'id': alert.id,
-                'stock_symbol': alert.stock.symbol,
-                'stock_name': alert.stock.name,
-                'alert_type': alert.alert_type,
-                'threshold_value': convert_numpy_types(alert.threshold_value),
-                'is_active': alert.is_active,
-                'created_at': alert.created_at.isoformat()
-            }
-            for alert in alerts
-        ]
+        alerts = db.query(Alert).join(Stock).filter(Alert.user_id == user.id).all()
+        
+        alerts_data = []
+        for alert in alerts:
+            # Get current price for comparison
+            current_price = get_current_price(alert.stock.symbol)
+            
+            alerts_data.append({
+                "id": alert.id,
+                "stock_symbol": alert.stock.symbol,
+                "stock_name": alert.stock.name,
+                "alert_type": alert.alert_type,
+                "threshold_value": alert.threshold_value,
+                "current_value": current_price,
+                "is_active": alert.is_active,
+                "last_triggered": alert.last_triggered,
+                "created_at": alert.created_at
+            })
+        
+        return {"success": True, "alerts": alerts_data}
     except Exception as e:
-        logger.error(f"Error getting alerts for user {user.username}: {str(e)}")
-        return []
+        logger.error(f"Error getting alerts: {str(e)}")
+        return {"success": False, "message": f"Failed to get alerts: {str(e)}"}
 
 def update_alert(alert_id: int, is_active: bool = None, threshold_value: float = None):
-    """Update an existing alert."""
+    """Update an alert's status or threshold value"""
     try:
-        with db.atomic():
-            alert = Alert.get_by_id(alert_id)
-            
-            if is_active is not None:
-                alert.is_active = is_active
-                
-            if threshold_value is not None:
-                # Convert threshold value to standard float
-                threshold_value = convert_numpy_types(threshold_value)
-                alert.threshold_value = float(threshold_value)
-                
-            alert.save()
-            
-            return {
-                'id': alert.id,
-                'stock_symbol': alert.stock.symbol,
-                'stock_name': alert.stock.name,
-                'alert_type': alert.alert_type,
-                'threshold_value': convert_numpy_types(alert.threshold_value),
-                'is_active': alert.is_active,
-                'created_at': alert.created_at.isoformat()
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return {"success": False, "message": f"Alert with ID {alert_id} not found"}
+        
+        # Update fields if provided
+        if is_active is not None:
+            alert.is_active = is_active
+        
+        if threshold_value is not None:
+            alert.threshold_value = convert_numpy_types(threshold_value)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Alert updated",
+            "alert": {
+                "id": alert.id,
+                "stock_symbol": alert.stock.symbol,
+                "alert_type": alert.alert_type,
+                "threshold_value": alert.threshold_value,
+                "is_active": alert.is_active
             }
-    except Alert.DoesNotExist:
-        logger.error(f"Alert {alert_id} not found")
-        return None
+        }
     except Exception as e:
-        logger.error(f"Error updating alert {alert_id}: {str(e)}")
-        return None
+        db.rollback()
+        logger.error(f"Error updating alert: {str(e)}")
+        return {"success": False, "message": f"Failed to update alert: {str(e)}"}
 
 def delete_alert(alert_id: int) -> bool:
-    """Delete an alert."""
+    """Delete an alert by ID"""
     try:
-        with db.atomic():
-            alert = Alert.get_by_id(alert_id)
-            alert.delete_instance()
-            return True
-    except Alert.DoesNotExist:
-        logger.error(f"Alert {alert_id} not found")
-        return False
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return {"success": False, "message": f"Alert with ID {alert_id} not found"}
+        
+        db.delete(alert)
+        db.commit()
+        
+        return {"success": True, "message": f"Alert deleted successfully"}
     except Exception as e:
-        logger.error(f"Error deleting alert {alert_id}: {str(e)}")
-        return False 
+        db.rollback()
+        logger.error(f"Error deleting alert: {str(e)}")
+        return {"success": False, "message": f"Failed to delete alert: {str(e)}"} 

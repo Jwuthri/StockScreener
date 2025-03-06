@@ -6,7 +6,7 @@ from pathlib import Path
 # Add the parent directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent.parent))
 
-from backend.models.database import initialize_db, Stock, Alert
+from backend.models.database import initialize_db, Stock, Alert, db_session
 from backend.services.stock_service import (
     fetch_stock_info, 
     save_stock_to_db,
@@ -71,21 +71,34 @@ def initialize_sample_data():
         # }
     ]
     
-    for alert_data in sample_alerts:
-        try:
-            stock = Stock.get(Stock.symbol == alert_data["stock_symbol"])
-            
-            Alert.create(
-                stock=stock,
-                user_email=alert_data["user_email"],
-                alert_type=alert_data["alert_type"],
-                threshold_value=alert_data["threshold_value"],
-                is_active=True
-            )
-            
-            logger.info(f"Added alert for {alert_data['stock_symbol']}")
-        except Exception as e:
-            logger.error(f"Error adding alert: {str(e)}")
+    db = db_session()
+    try:
+        for alert_data in sample_alerts:
+            try:
+                stock = db.query(Stock).filter(Stock.symbol == alert_data["stock_symbol"]).first()
+                if not stock:
+                    logger.error(f"Stock {alert_data['stock_symbol']} not found")
+                    continue
+                
+                alert = Alert(
+                    stock_id=stock.id,
+                    user_email=alert_data["user_email"],
+                    alert_type=alert_data["alert_type"],
+                    threshold_value=alert_data["threshold_value"],
+                    is_active=True
+                )
+                
+                db.add(alert)
+                logger.info(f"Added alert for {alert_data['stock_symbol']}")
+            except Exception as e:
+                logger.error(f"Error adding alert: {str(e)}")
+        
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error committing alerts: {str(e)}")
+    finally:
+        db.close()
     
     logger.info("Sample data initialization complete")
 
