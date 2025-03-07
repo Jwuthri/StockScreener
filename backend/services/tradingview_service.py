@@ -1670,7 +1670,8 @@ def get_stocks_with_open_below_prev_day_high(limit: int = 100,
             logger.info("No more stocks found in this batch, stopping")
             return []
         
-        previous_day_data = db_session().query(PriceHistory, Stock).join(Stock, PriceHistory.stock_id == Stock.id).filter(PriceHistory.date == datetime.now().strftime('%Y/%m/%d')).all()
+        prev_day = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
+        previous_day_data = db_session().query(PriceHistory, Stock).join(Stock, PriceHistory.stock_id == Stock.id).filter(PriceHistory.date == prev_day).all()
         data = []
         for price_history, stock in previous_day_data:
             record = {
