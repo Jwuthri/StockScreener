@@ -564,10 +564,14 @@ async def get_stocks_crossing_prev_day_low_endpoint(
 @router.get("/screener/open-below-prev-high")
 async def get_stocks_open_below_prev_high_endpoint(
     limit: int = Query(50, ge=1, le=10_000, description="Maximum number of stocks to return"),
-    min_price: float = Query(0.25, description="Minimum stock price"),
-    max_price: float = Query(10.0, description="Maximum stock price"),
+    min_price: float = Query(0., description="Minimum stock price"),
+    max_price: float = Query(100.0, description="Maximum stock price"),
     batch_size: int = Query(250, description="Number of stocks to process in each batch"),
-    min_volume: int = Query(250_000, description="Minimum volume filter")
+    min_volume: int = Query(250_000, description="Minimum volume filter"),
+    min_diff_percent: float = Query(-100.0, description="Minimum difference percentage from previous day high"),
+    max_diff_percent: float = Query(1000.0, description="Maximum difference percentage from previous day high"),
+    min_change_percent: float = Query(-100.0, description="Minimum change percentage from previous day high"),
+    max_change_percent: float = Query(100.0, description="Maximum change percentage from previous day high")
 ):
     """
     Get stocks where the current day's open price is below the previous day's high.
@@ -582,30 +586,21 @@ async def get_stocks_open_below_prev_high_endpoint(
             min_price=min_price,
             max_price=max_price,
             batch_size=batch_size,
-            min_volume=min_volume
+            min_volume=min_volume,
+            min_diff_percent=min_diff_percent,
+            max_diff_percent=max_diff_percent,
+            min_change_percent=min_change_percent,
+            max_change_percent=max_change_percent
         )
-
-        # # Make sure the response data is serializable
-        # for stock in stocks:
-        #     # Ensure diff_percent and change_percent are simple floats
-        #     try:
-        #         stock['diff_percent'] = float(stock['diff_percent'])
-        #     except (ValueError, TypeError):
-        #         stock['diff_percent'] = 0.0
-                
-        #     try:
-        #         stock['change_percent'] = float(stock['change_percent'])
-        #     except (ValueError, TypeError):
-        #         stock['change_percent'] = 0.0
-        
-        # logger.info(f"Returning {len(stocks)} stocks with open below previous day high")
         
         return {
             "stocks": stocks[:limit],
             "count": len(stocks[:limit]),
             "min_price": min_price,
             "max_price": max_price,
-            "min_volume": min_volume
+            "min_volume": min_volume,
+            "min_diff_percent": min_diff_percent,
+            "max_diff_percent": max_diff_percent
         }
     except Exception as e:
         logger.error(f"Error screening for stocks with open below previous day high: {str(e)}")

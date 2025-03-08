@@ -1632,7 +1632,11 @@ def get_stocks_with_open_below_prev_day_high(limit: int = 100,
                                       min_price: float = 0.25, 
                                       max_price: float = 10,
                                       batch_size: int = 250,
-                                      min_volume: int = 250_000) -> List[Dict[str, Any]]:
+                                      min_volume: int = 250_000,
+                                    min_diff_percent: float = -20.0,
+                                    max_diff_percent: float = 0.0,
+                                    min_change_percent: float = -20.0,
+                                    max_change_percent: float = 0.0) -> List[Dict[str, Any]]:
     """
     Get stocks where the current day's open price is below the previous day's high.
     Uses batching to process a larger number of stocks.
@@ -1745,6 +1749,9 @@ def get_stocks_with_open_below_prev_day_high(limit: int = 100,
                     if current_open < prev_day_high:
                         include_stock = True
                         diff_percent = ((prev_day_high - current_open) / prev_day_high) * 100
+
+                        if diff_percent < min_diff_percent or diff_percent > max_diff_percent:
+                            include_stock = False
                 else:
                     # Include stocks with missing price data (like in your screenshot)
                     include_stock = True
@@ -1756,6 +1763,10 @@ def get_stocks_with_open_below_prev_day_high(limit: int = 100,
                         change_percent = float(stock.get('change', 0))
                     except (TypeError, ValueError):
                         change_percent = None
+                        continue
+                    
+                    if min_change_percent > change_percent or change_percent > max_change_percent:
+                        continue
                     
                     # Get all the data we want to return
                     stock_data = {

@@ -60,7 +60,10 @@ const AdvancedFilters = ({
   exchanges, 
   formatPrice, 
   formatPercentage, 
-  formatVolume 
+  formatVolume,
+  showOpenBelowPrevHigh,
+  diffRange,
+  handleDiffRangeChange
 }) => {
   if (!showAdvanced) return null;
   
@@ -80,6 +83,7 @@ const AdvancedFilters = ({
       >
         <Tab label="Price" value="price" />
         <Tab label="Change %" value="change" />
+        {showOpenBelowPrevHigh && <Tab label="Diff %" value="diff" />}
         <Tab label="Volume" value="volume" />
         <Tab label="Sector" value="sector" />
       </Tabs>
@@ -350,6 +354,26 @@ const AdvancedFilters = ({
               </FormControl>
             </Grid>
           </Grid>
+        </Box>
+      )}
+      
+      {selectedFilterTab === "diff" && showOpenBelowPrevHigh && (
+        <Box>
+          <Typography gutterBottom>
+            Difference from Previous High: {diffRange[0]}% to {diffRange[1]}%
+          </Typography>
+          <Slider
+            value={diffRange}
+            onChange={handleDiffRangeChange}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(value) => `${value}%`}
+            min={-50}
+            max={50}
+            sx={{ mt: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Shows stocks that opened below previous day's high by the specified percentage range
+          </Typography>
         </Box>
       )}
     </Box>
@@ -734,6 +758,9 @@ const StockScreener = () => {
     limit: 50
   });
   
+  // Add new state for diff range
+  const [diffRange, setDiffRange] = useState([-50, 50]);
+  
   // Fetch popular stocks on component mount
   useEffect(() => {
     const fetchPopularStocks = async () => {
@@ -860,6 +887,12 @@ const StockScreener = () => {
     // Add exchange if selected
     if (exchange) {
       params.exchange = exchange;
+    }
+    
+    // Add diff range parameters for Open Below Prev High screener
+    if (showOpenBelowPrevHigh) {
+      params.min_diff_percent = diffRange[0];
+      params.max_diff_percent = diffRange[1];
     }
     
     return params;
@@ -1186,13 +1219,17 @@ const StockScreener = () => {
       setLoading(true);
       setError('');
       
-      // Combine standard params with specific params for this screener
-      const params = {
-        ...getAdvancedFilterParams(showAdvancedInOBPH),
-        min_price: openBelowPrevHighParams.min_price,
-        max_price: openBelowPrevHighParams.max_price,
-        min_volume: openBelowPrevHighParams.min_volume
-      };
+      // Get parameters from advanced filters
+      const params = getAdvancedFilterParams(showAdvancedInOBPH);
+      
+      // If no advanced filters are set, use default parameters
+      if (!showAdvancedInOBPH) {
+        params.min_price = 0.25;
+        params.max_price = 10.0;
+        params.min_volume = 250000;
+      }
+      
+      console.log("Searching for stocks with open below previous day high with params:", params);
       
       const response = await axios.get(`${API_URL}/api/stocks/screener/open-below-prev-high`, { params });
       
@@ -1226,6 +1263,11 @@ const StockScreener = () => {
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Add handler for diff range changes
+  const handleDiffRangeChange = (event, newValue) => {
+    setDiffRange(newValue);
   };
   
   // Shared filter props for advanced filters component
@@ -1262,7 +1304,10 @@ const StockScreener = () => {
     exchanges,
     formatPrice,
     formatPercentage,
-    formatVolume
+    formatVolume,
+    showOpenBelowPrevHigh,
+    diffRange,
+    handleDiffRangeChange
   };
 
   return (
@@ -1658,56 +1703,6 @@ const StockScreener = () => {
             advancedFiltersProps={advancedFiltersProps}
           >
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Price Range
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <TextField
-                    size="small"
-                    label="Min $"
-                    type="number"
-                    inputProps={{ min: 0, step: 0.01 }}
-                    value={openBelowPrevHighParams.min_price}
-                    onChange={(e) => setOpenBelowPrevHighParams({
-                      ...openBelowPrevHighParams,
-                      min_price: parseFloat(e.target.value)
-                    })}
-                    sx={{ width: '100%' }}
-                  />
-                  <Typography variant="body2">to</Typography>
-                  <TextField
-                    size="small"
-                    label="Max $"
-                    type="number"
-                    inputProps={{ min: 0, step: 0.01 }}
-                    value={openBelowPrevHighParams.max_price}
-                    onChange={(e) => setOpenBelowPrevHighParams({
-                      ...openBelowPrevHighParams,
-                      max_price: parseFloat(e.target.value)
-                    })}
-                    sx={{ width: '100%' }}
-                  />
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} md={3}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Min Volume
-                </Typography>
-                <TextField
-                  size="small"
-                  type="number"
-                  inputProps={{ min: 0, step: 10000 }}
-                  value={openBelowPrevHighParams.min_volume}
-                  onChange={(e) => setOpenBelowPrevHighParams({
-                    ...openBelowPrevHighParams,
-                    min_volume: parseInt(e.target.value)
-                  })}
-                  sx={{ width: '100%' }}
-                />
-              </Grid>
-              
               <Grid item xs={12} md={6}>
                 <Button 
                   variant="contained" 
