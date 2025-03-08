@@ -1055,6 +1055,7 @@ const StockScreener = () => {
       console.log("Searching for stocks with consecutive positive candles with params:", params);
       
       const response = await axios.get(endpoint, { params });
+      console.log("API Response:", response.data);
       
       if (response.data && response.data.stocks) {
         const processedStocks = processStockData(response.data.stocks);
@@ -1169,9 +1170,9 @@ const StockScreener = () => {
       setError('');
       
       const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-low`;
-      const params = getAdvancedFilterParams(showAdvancedInPDHC);
+      const params = { limit: 100 }; // Only use limit, no other filters
       
-      console.log("Searching for stocks below previous day low with params:", params);
+      console.log("Searching for stocks below previous day low with minimal params:", params);
       
       const response = await axios.get(endpoint, { params });
       
@@ -1429,6 +1430,149 @@ const StockScreener = () => {
     showOpenBelowPrevHigh,
     diffRange,
     handleDiffRangeChange
+  };
+
+  // Add these cache-related functions for Home page data
+  const getHomePageCacheKey = (dataType) => {
+    return `homePage_${dataType}`;
+  };
+
+  const saveHomePageDataToCache = (dataType, data) => {
+    const cacheKey = getHomePageCacheKey(dataType);
+    const cacheData = {
+      timestamp: new Date().getTime(),
+      data: data,
+      lastUpdated: new Date()
+    };
+    
+    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    return cacheData;
+  };
+
+  const loadHomePageDataFromCache = (dataType) => {
+    const cacheKey = getHomePageCacheKey(dataType);
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        const parsedCache = JSON.parse(cached);
+        // Check if cache is less than 5 minutes old
+        const cacheAge = new Date().getTime() - parsedCache.timestamp;
+        if (cacheAge < 5 * 60 * 1000) { // 5 minutes
+          return parsedCache;
+        }
+      } catch (error) {
+        console.error(`Error parsing ${dataType} cache:`, error);
+        // If there's an error parsing the cache, remove it
+        localStorage.removeItem(cacheKey);
+      }
+    }
+    return null;
+  };
+
+  // Function to fetch top gainers with caching
+  const fetchTopGainers = async (limit = 10, forceRefresh = false) => {
+    // Try to load from cache first if not forcing refresh
+    if (!forceRefresh) {
+      const cachedData = loadHomePageDataFromCache('topGainers');
+      if (cachedData) {
+        return cachedData.data;
+      }
+    }
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/stocks/top-gainers`, {
+        params: { limit }
+      });
+      
+      if (response.data && response.data.stocks) {
+        const processedStocks = processStockData(response.data.stocks);
+        // Save to cache
+        saveHomePageDataToCache('topGainers', processedStocks);
+        return processedStocks;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching top gainers:', error);
+      return [];
+    }
+  };
+
+  // Function to fetch top losers with caching
+  const fetchTopLosers = async (limit = 10, forceRefresh = false) => {
+    // Try to load from cache first if not forcing refresh
+    if (!forceRefresh) {
+      const cachedData = loadHomePageDataFromCache('topLosers');
+      if (cachedData) {
+        return cachedData.data;
+      }
+    }
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/stocks/top-losers`, {
+        params: { limit }
+      });
+      
+      if (response.data && response.data.stocks) {
+        const processedStocks = processStockData(response.data.stocks);
+        // Save to cache
+        saveHomePageDataToCache('topLosers', processedStocks);
+        return processedStocks;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching top losers:', error);
+      return [];
+    }
+  };
+
+  // Function to fetch most active stocks with caching
+  const fetchMostActive = async (limit = 10, forceRefresh = false) => {
+    // Try to load from cache first if not forcing refresh
+    if (!forceRefresh) {
+      const cachedData = loadHomePageDataFromCache('mostActive');
+      if (cachedData) {
+        return cachedData.data;
+      }
+    }
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/stocks/most-active`, {
+        params: { limit }
+      });
+      
+      if (response.data && response.data.stocks) {
+        const processedStocks = processStockData(response.data.stocks);
+        // Save to cache
+        saveHomePageDataToCache('mostActive', processedStocks);
+        return processedStocks;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching most active stocks:', error);
+      return [];
+    }
+  };
+
+  // Function to refresh all home page data
+  const refreshHomePageData = async () => {
+    try {
+      const [gainers, losers, active] = await Promise.all([
+        fetchTopGainers(10, true),
+        fetchTopLosers(10, true),
+        fetchMostActive(10, true)
+      ]);
+      
+      return {
+        topGainers: gainers,
+        topLosers: losers,
+        mostActive: active,
+        lastUpdated: new Date()
+      };
+    } catch (error) {
+      console.error('Error refreshing home page data:', error);
+      throw error;
+    }
   };
 
   return (
