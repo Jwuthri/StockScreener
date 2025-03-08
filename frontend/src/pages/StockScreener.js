@@ -1702,18 +1702,29 @@ const StockScreener = () => {
             setShowAdvanced={setShowAdvancedInOBPH}
             advancedFiltersProps={advancedFiltersProps}
           >
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  onClick={handleOpenBelowPrevHighSearch}
-                  startIcon={<SearchIcon />}
-                  sx={{ mt: 3, width: '100%' }}
-                >
-                  Find Stocks
-                </Button>
-              </Grid>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                  <Paper sx={{ p: 2, height: '56px', display: 'flex', alignItems: 'center', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)' }}>
+                    <Typography variant="body1" color="text.secondary">
+                      Finds stocks that opened below previous day's high
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                {/* Search Button */}
+                <Grid item xs={12} md={4}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    color="primary"
+                    onClick={handlePrevDayHighCrossSearch}
+                    disabled={loading}
+                    startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
+                    sx={{ height: '56px' }}
+                  >
+                    {loading ? 'Searching...' : 'Find Stocks'}
+                  </Button>
+                </Grid>
             </Grid>
           </ScreenerBox>
         )}
