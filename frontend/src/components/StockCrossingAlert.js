@@ -59,4 +59,4 @@ const StockCrossingAlert = ({ stock }) => {
   );
 };
 
-export default StockCrossingAlert; 
+export default StockCrossingAlert;

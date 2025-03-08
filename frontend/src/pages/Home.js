@@ -23,7 +23,7 @@ const Home = () => {
           fetchTopLosers(),
           fetchMostActive()
         ]);
-        
+
         setTopGainers(gainers);
         setTopLosers(losers);
         setMostActive(active);
@@ -35,7 +35,7 @@ const Home = () => {
         setLoading(false);
       }
     };
-    
+
     loadHomePageData();
   }, []);
 
@@ -43,7 +43,7 @@ const Home = () => {
   const handleRefresh = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const refreshedData = await refreshHomePageData();
       setTopGainers(refreshedData.topGainers);
@@ -61,16 +61,16 @@ const Home = () => {
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">Market Overview</Typography>
-        
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {lastUpdated && (
             <Typography variant="body2" color="text.secondary">
               Last updated: {lastUpdated.toLocaleTimeString()}
             </Typography>
           )}
-          
-          <Button 
-            variant="outlined" 
+
+          <Button
+            variant="outlined"
             startIcon={loading ? <CircularProgress size={20} /> : <RefreshIcon />}
             onClick={handleRefresh}
             disabled={loading}
@@ -79,13 +79,13 @@ const Home = () => {
           </Button>
         </Box>
       </Box>
-      
+
       {error && (
         <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light', color: 'error.contrastText' }}>
           <Typography>{error}</Typography>
         </Paper>
       )}
-      
+
       <Grid container spacing={3}>
         {/* Top Gainers */}
         <Grid item xs={12} md={4}>
@@ -93,38 +93,38 @@ const Home = () => {
             <Typography variant="h6" gutterBottom sx={{ color: 'success.main' }}>
               Top Gainers
             </Typography>
-            <StockList 
-              stocks={topGainers} 
-              loading={loading} 
-              emptyMessage="No gainers data available" 
+            <StockList
+              stocks={topGainers}
+              loading={loading}
+              emptyMessage="No gainers data available"
             />
           </Paper>
         </Grid>
-        
+
         {/* Top Losers */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom sx={{ color: 'error.main' }}>
               Top Losers
             </Typography>
-            <StockList 
-              stocks={topLosers} 
-              loading={loading} 
-              emptyMessage="No losers data available" 
+            <StockList
+              stocks={topLosers}
+              loading={loading}
+              emptyMessage="No losers data available"
             />
           </Paper>
         </Grid>
-        
+
         {/* Most Active */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom sx={{ color: 'info.main' }}>
               Most Active
             </Typography>
-            <StockList 
-              stocks={mostActive} 
-              loading={loading} 
-              emptyMessage="No active stocks data available" 
+            <StockList
+              stocks={mostActive}
+              loading={loading}
+              emptyMessage="No active stocks data available"
             />
           </Paper>
         </Grid>
@@ -133,4 +133,4 @@ const Home = () => {
   );
 };
 
-export default Home; 
+export default Home;

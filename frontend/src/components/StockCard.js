@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Typography, 
-  Box, 
+import {
+  Card,
+  CardContent,
+  Typography,
+  Box,
   Chip,
   IconButton,
   Divider,
   Skeleton
 } from '@mui/material';
-import { 
-  TrendingUp as TrendingUpIcon, 
+import {
+  TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Notifications as NotificationsIcon,
   Star as StarIcon,
@@ -24,7 +24,7 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
   const [stockData, setStockData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
-  
+
   useEffect(() => {
     const fetchStockData = async () => {
       try {
@@ -48,33 +48,33 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
         setIsLoading(false);
       }
     };
-    
+
     fetchStockData();
   }, [symbol]);
-  
+
   const handleAddToFavorites = (e) => {
     e.stopPropagation();
     setIsFavorite(!isFavorite);
     // Logic to add/remove from favorites would go here
   };
-  
+
   const handleAddAlert = (e) => {
     e.stopPropagation();
     if (onAddAlert) {
       onAddAlert(symbol);
     }
   };
-  
+
   const handleCardClick = () => {
     navigate(`/stock/${symbol}`);
   };
-  
+
   const isPositive = stockData && parseFloat(stockData.change) >= 0;
-  
+
   return (
-    <Card 
-      sx={{ 
-        height: '100%', 
+    <Card
+      sx={{
+        height: '100%',
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
         '&:hover': {
@@ -94,17 +94,17 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
               {name}
             </Typography>
           </Box>
-          
+
           <Box>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color={isFavorite ? 'warning' : 'default'}
               onClick={handleAddToFavorites}
             >
               {isFavorite ? <StarIcon /> : <StarBorderIcon />}
             </IconButton>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color="primary"
               onClick={handleAddAlert}
             >
@@ -112,9 +112,9 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
             </IconButton>
           </Box>
         </Box>
-        
+
         <Divider sx={{ my: 1 }} />
-        
+
         <Box sx={{ mt: 1, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           {isLoading ? (
             <>
@@ -126,7 +126,7 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
               <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', mb: 1 }}>
                 ${stockData?.price?.toFixed(2)}
               </Typography>
-              
+
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Chip
                   icon={isPositive ? <TrendingUpIcon /> : <TrendingDownIcon />}
@@ -144,4 +144,4 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
   );
 };
 
-export default StockCard; 
+export default StockCard;

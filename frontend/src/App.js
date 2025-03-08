@@ -51,7 +51,7 @@ const AuthenticatedLayout = ({ children }) => (
         alignItems: 'center'
       }}
     >
-      <Box 
+      <Box
         sx={{
           width: '100%',
           maxWidth: '1200px',

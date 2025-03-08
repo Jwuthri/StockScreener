@@ -8,20 +8,20 @@ export const login = async (username, password) => {
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
-        
+
         const response = await api.post('/api/auth/token', formData, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
         const { access_token } = response.data;
-        
+
         // Store the token
         localStorage.setItem(AUTH_TOKEN_KEY, access_token);
-        
+
         // Update axios default headers
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-        
+
         return true;
     } catch (error) {
         console.error('Login error:', error);
@@ -66,4 +66,4 @@ export const isAuthenticated = () => {
 const token = localStorage.getItem(AUTH_TOKEN_KEY);
 if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-} 
+}

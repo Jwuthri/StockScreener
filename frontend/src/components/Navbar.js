@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  InputBase, 
-  IconButton, 
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  InputBase,
+  IconButton,
   Badge,
   Avatar,
   Menu,
@@ -100,7 +100,7 @@ const Navbar = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [user, setUser] = useState(null);
-  
+
   useEffect(() => {
     const fetchUser = async () => {
       const userData = await getCurrentUser();
@@ -110,7 +110,7 @@ const Navbar = () => {
     };
     fetchUser();
   }, []);
-  
+
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -138,7 +138,7 @@ const Navbar = () => {
           <BrandText onClick={() => navigate('/')}>
             Stock Screener
           </BrandText>
-          
+
           <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
             <Search>
               <SearchIconWrapper>
@@ -153,13 +153,13 @@ const Navbar = () => {
             </Search>
           </Box>
         </LogoSection>
-        
+
         <NavbarActions>
-          <Box 
-            sx={{ 
-              display: 'flex', 
-              gap: 1, 
-              mr: 2, 
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              mr: 2,
               cursor: 'pointer',
               '&:hover': {
                 color: theme.palette.primary.main
@@ -167,18 +167,18 @@ const Navbar = () => {
             }}
             onClick={() => navigate('/screener')}
           >
-            <Typography 
-              variant="body2" 
+            <Typography
+              variant="body2"
               sx={{ fontWeight: 500 }}
             >
               Screener
             </Typography>
             <KeyboardArrowDownIcon fontSize="small" />
           </Box>
-          
-          <IconButton 
-            color="inherit" 
-            size="medium" 
+
+          <IconButton
+            color="inherit"
+            size="medium"
             onClick={() => navigate('/alerts')}
             sx={{ color: theme.palette.text.primary }}
           >
@@ -186,7 +186,7 @@ const Navbar = () => {
               <NotificationsIcon fontSize="small" />
             </Badge>
           </IconButton>
-          
+
           <IconButton
             edge="end"
             aria-label="account of current user"
@@ -195,9 +195,9 @@ const Navbar = () => {
             color="inherit"
             size="medium"
           >
-            <Avatar 
-              sx={{ 
-                width: 30, 
+            <Avatar
+              sx={{
+                width: 30,
                 height: 30,
                 bgcolor: theme.palette.grey[100],
                 color: theme.palette.text.primary
@@ -207,7 +207,7 @@ const Navbar = () => {
             </Avatar>
           </IconButton>
         </NavbarActions>
-        
+
         <Menu
           anchorEl={anchorEl}
           anchorOrigin={{

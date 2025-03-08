@@ -7,7 +7,7 @@ import { Box } from '@mui/material';
 
 const DataPoint = ({ position, height, color, isHighlighted }) => {
   const meshRef = useRef();
-  
+
   useFrame(() => {
     if (meshRef.current && isHighlighted) {
       meshRef.current.rotation.y += 0.01;
@@ -17,9 +17,9 @@ const DataPoint = ({ position, height, color, isHighlighted }) => {
   return (
     <mesh position={position} ref={meshRef}>
       <boxGeometry args={[1, height, 1]} />
-      <meshStandardMaterial 
-        color={color} 
-        emissive={isHighlighted ? color : '#000000'} 
+      <meshStandardMaterial
+        color={color}
+        emissive={isHighlighted ? color : '#000000'}
         emissiveIntensity={isHighlighted ? 0.5 : 0}
         roughness={0.3}
         metalness={0.8}
@@ -64,26 +64,26 @@ const StockChart3D = ({ data = [], width = '100%', height = 400 }) => {
     const linePoints = [];
     let maxValue = Math.max(...data.map(d => d.value));
     let minValue = Math.min(...data.map(d => d.value));
-    
+
     // Scale factor for better visualization
     const scaleFactor = 10 / (maxValue - minValue || 1);
-    
+
     data.forEach((point, index) => {
       const normalizedValue = (point.value - minValue) * scaleFactor;
       const x = (index - data.length / 2) * 1.5;
       const y = normalizedValue / 2; // Half height because position is at center
       const z = 0;
-      
+
       points.push({
         position: [x, y, z],
         height: normalizedValue,
         color: point.value >= 0 ? '#32d794' : '#ff4757',
         isHighlighted: point.isHighlighted
       });
-      
+
       linePoints.push({ x, y: normalizedValue, z });
     });
-    
+
     return {
       points,
       linePoints,
@@ -100,18 +100,18 @@ const StockChart3D = ({ data = [], width = '100%', height = 400 }) => {
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
         <pointLight position={[-10, -10, -10]} intensity={0.5} />
-        
+
         <group position={[0, 0, 0]}>
           {/* Floor grid */}
-          <gridHelper 
-            args={[30, 30, '#1a1a2e', '#27374d']} 
-            position={[0, -0.1, 0]} 
-            rotation={[0, 0, 0]} 
+          <gridHelper
+            args={[30, 30, '#1a1a2e', '#27374d']}
+            position={[0, -0.1, 0]}
+            rotation={[0, 0, 0]}
           />
-          
+
           {/* Data Points */}
           {chartData.points.map((point, index) => (
-            <DataPoint 
+            <DataPoint
               key={index}
               position={point.position}
               height={point.height}
@@ -119,24 +119,24 @@ const StockChart3D = ({ data = [], width = '100%', height = 400 }) => {
               isHighlighted={point.isHighlighted}
             />
           ))}
-          
+
           {/* Line connecting points */}
-          <DataLine 
+          <DataLine
             points={chartData.linePoints}
             color="#6562fc"
           />
         </group>
 
-        <OrbitControls 
+        <OrbitControls
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
           target={[0, chartData.maxHeight / 2, 0]}
         />
-        
+
         {/* Post-processing effects */}
         <EffectComposer>
-          <Bloom 
+          <Bloom
             luminanceThreshold={0.1}
             luminanceSmoothing={0.9}
             intensity={0.4}
@@ -147,4 +147,4 @@ const StockChart3D = ({ data = [], width = '100%', height = 400 }) => {
   );
 };
 
-export default StockChart3D; 
+export default StockChart3D;

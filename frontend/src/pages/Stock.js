@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { 
+import {
   Container, Typography, Grid, Paper, Box, Tabs, Tab, CircularProgress,
   Card, CardContent, Divider, Button, Chip, List, ListItem, ListItemText
 } from '@mui/material';
@@ -44,14 +44,14 @@ const Stock = () => {
     const fetchChartData = async () => {
       try {
         const response = await axios.get(`/api/chart/${symbol}?timeframe=${timeframe}`);
-        
+
         // Transform data for the chart
         const formattedData = response.data.data.map(point => ({
           date: new Date(point.time * 1000).toLocaleString(),
           price: point.price,
           volume: point.volume
         }));
-        
+
         setChartData(formattedData);
       } catch (err) {
         console.error("Error fetching chart data:", err);
@@ -86,8 +86,8 @@ const Stock = () => {
   // Format percent change for display
   const percentChange = stockData ? parseFloat(stockData.percent_change) : 0;
   const isPositive = percentChange >= 0;
-  const formattedPercentChange = isPositive 
-    ? `+${percentChange.toFixed(2)}%` 
+  const formattedPercentChange = isPositive
+    ? `+${percentChange.toFixed(2)}%`
     : `${percentChange.toFixed(2)}%`;
 
   return (
@@ -102,9 +102,9 @@ const Stock = () => {
               <Typography variant="h5" component="span" sx={{ mr: 2 }}>
                 ${stockData.price}
               </Typography>
-              <Typography 
-                variant="subtitle1" 
-                component="span" 
+              <Typography
+                variant="subtitle1"
+                component="span"
                 sx={{ color: isPositive ? 'success.main' : 'error.main' }}
               >
                 {stockData.change} ({formattedPercentChange})
@@ -135,9 +135,9 @@ const Stock = () => {
                         margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="date" 
-                          tick={{ fontSize: 12 }} 
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 12 }}
                           tickFormatter={(val) => {
                             if (timeframe === "1D" || timeframe === "5D") {
                               return new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -146,18 +146,18 @@ const Stock = () => {
                             }
                           }}
                         />
-                        <YAxis 
+                        <YAxis
                           domain={['dataMin', 'dataMax']}
                           tickFormatter={(val) => `$${val.toFixed(2)}`}
                         />
-                        <Tooltip 
+                        <Tooltip
                           formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
                           labelFormatter={(label) => new Date(label).toLocaleString()}
                         />
-                        <Line 
-                          type="monotone" 
-                          dataKey="price" 
-                          stroke={isPositive ? "#4caf50" : "#f44336"} 
+                        <Line
+                          type="monotone"
+                          dataKey="price"
+                          stroke={isPositive ? "#4caf50" : "#f44336"}
                           dot={false}
                           strokeWidth={2}
                         />
@@ -183,23 +183,23 @@ const Stock = () => {
                   <Divider sx={{ mb: 2 }} />
                   <List dense>
                     <ListItem>
-                      <ListItemText 
-                        primary="Sector" 
-                        secondary={stockData.sector} 
+                      <ListItemText
+                        primary="Sector"
+                        secondary={stockData.sector}
                       />
                     </ListItem>
                     <ListItem>
-                      <ListItemText 
-                        primary="Industry" 
-                        secondary={stockData.industry} 
+                      <ListItemText
+                        primary="Industry"
+                        secondary={stockData.industry}
                       />
                     </ListItem>
                     <ListItem>
-                      <ListItemText 
-                        primary="Description" 
+                      <ListItemText
+                        primary="Description"
                         secondary={stockData.description}
                         secondaryTypographyProps={{
-                          style: { 
+                          style: {
                             whiteSpace: 'normal',
                             display: '-webkit-box',
                             WebkitLineClamp: 4,
@@ -266,7 +266,7 @@ const Stock = () => {
                     <Typography variant="h6">Related News</Typography>
                   </Box>
                   <Divider sx={{ mb: 2 }} />
-                  
+
                   {/* For now, just show a placeholder */}
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
                     <Typography color="text.secondary">
@@ -283,4 +283,4 @@ const Stock = () => {
   );
 };
 
-export default Stock; 
+export default Stock;

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-    Box, 
-    Typography, 
-    TextField, 
-    Button, 
-    Paper, 
+import {
+    Box,
+    Typography,
+    TextField,
+    Button,
+    Paper,
     Alert,
     Link,
     useTheme
@@ -46,14 +46,14 @@ const Login = () => {
             username: !formData.username.trim(),
             password: !formData.password.trim()
         };
-        
+
         setFieldErrors(newFieldErrors);
         return !Object.values(newFieldErrors).some(Boolean);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!validateForm()) {
             setError('Please fill in all required fields');
             return;
@@ -116,9 +116,9 @@ const Login = () => {
                     </Alert>
                 )}
 
-                <Box 
-                    component="form" 
-                    onSubmit={handleSubmit} 
+                <Box
+                    component="form"
+                    onSubmit={handleSubmit}
                     sx={{ width: '100%' }}
                     noValidate // Disable browser's HTML5 validation
                 >
@@ -154,8 +154,8 @@ const Login = () => {
                         type="submit"
                         fullWidth
                         variant="contained"
-                        sx={{ 
-                            mt: 3, 
+                        sx={{
+                            mt: 3,
                             mb: 2,
                             bgcolor: theme.palette.success.main,
                             '&:hover': {
@@ -178,4 +178,4 @@ const Login = () => {
     );
 };
 
-export default Login; 
+export default Login;

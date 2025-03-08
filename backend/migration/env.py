@@ -1,22 +1,19 @@
+import sys
 from logging.config import fileConfig
 from pathlib import Path
-import sys
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-import sqlalchemy as sa
-from sqlalchemy.orm import Session, declarative_base
 
 from alembic import context
+from sqlalchemy import engine_from_config, pool
+
 # Add the parent directory to the path so we can import our modules
 
 sys.path.append(str(Path(__file__).parent.parent))
 from models.database import Base
 
-POSTGRES_DATABASE_NAME="stock_screener"
-POSTGRES_DATABASE_PASSWORD="postgres"
-POSTGRES_DATABASE_URL="127.0.0.1:5432"
-POSTGRES_DATABASE_USERNAME="postgres"
+POSTGRES_DATABASE_NAME = "stock_screener"
+POSTGRES_DATABASE_PASSWORD = "postgres"
+POSTGRES_DATABASE_URL = "127.0.0.1:5432"
+POSTGRES_DATABASE_USERNAME = "postgres"
 DATABASE_URI = f"postgresql://:{POSTGRES_DATABASE_PASSWORD}:{POSTGRES_DATABASE_PASSWORD}@{POSTGRES_DATABASE_URL}/{POSTGRES_DATABASE_NAME}"
 
 # Interpret the config file for Python logging.
@@ -67,9 +64,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

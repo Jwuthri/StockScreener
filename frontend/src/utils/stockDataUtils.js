@@ -22,16 +22,16 @@ export const formatVolume = (value) => {
   if (!value) {
     return 'N/A';
   }
-  
+
   const num = parseFloat(value);
   if (isNaN(num)) return 'N/A';
-  
+
   if (num >= 1000000) {
     return `${(num / 1000000).toFixed(1)}M`;
   } else if (num >= 1000) {
     return `${(num / 1000).toFixed(1)}K`;
   }
-  
+
   return value.toString();
 };
 
@@ -39,13 +39,13 @@ export const formatVolume = (value) => {
 export const processStockData = (stockData) => {
   return stockData.map(stock => ({
     ...stock,
-    price: stock.price_display || 
+    price: stock.price_display ||
            (typeof stock.price === 'number' ? formatPrice(stock.price) : 'N/A'),
-    
-    change_percent: stock.change_percent_display || 
+
+    change_percent: stock.change_percent_display ||
                    (typeof stock.change_percent === 'number' ? formatPercentage(stock.change_percent) : 'N/A'),
-    
-    volume: stock.volume_display || 
+
+    volume: stock.volume_display ||
            (typeof stock.volume === 'number' ? formatVolume(stock.volume) : 'N/A')
   }));
 };
@@ -62,7 +62,7 @@ export const saveHomePageDataToCache = (dataType, data) => {
     data: data,
     lastUpdated: new Date()
   };
-  
+
   localStorage.setItem(cacheKey, JSON.stringify(cacheData));
   return cacheData;
 };
@@ -70,7 +70,7 @@ export const saveHomePageDataToCache = (dataType, data) => {
 export const loadHomePageDataFromCache = (dataType) => {
   const cacheKey = getHomePageCacheKey(dataType);
   const cached = localStorage.getItem(cacheKey);
-  
+
   if (cached) {
     try {
       const parsedCache = JSON.parse(cached);
@@ -97,12 +97,12 @@ export const fetchTopGainers = async (limit = 10, forceRefresh = false) => {
       return cachedData.data;
     }
   }
-  
+
   try {
     const response = await axios.get(`${API_URL}/api/stocks/top-gainers`, {
       params: { limit }
     });
-    
+
     if (response.data && response.data.stocks) {
       const processedStocks = processStockData(response.data.stocks);
       // Save to cache
@@ -125,12 +125,12 @@ export const fetchTopLosers = async (limit = 10, forceRefresh = false) => {
       return cachedData.data;
     }
   }
-  
+
   try {
     const response = await axios.get(`${API_URL}/api/stocks/top-losers`, {
       params: { limit }
     });
-    
+
     if (response.data && response.data.stocks) {
       const processedStocks = processStockData(response.data.stocks);
       // Save to cache
@@ -153,12 +153,12 @@ export const fetchMostActive = async (limit = 10, forceRefresh = false) => {
       return cachedData.data;
     }
   }
-  
+
   try {
     const response = await axios.get(`${API_URL}/api/stocks/most-active`, {
       params: { limit }
     });
-    
+
     if (response.data && response.data.stocks) {
       const processedStocks = processStockData(response.data.stocks);
       // Save to cache
@@ -180,7 +180,7 @@ export const refreshHomePageData = async () => {
       fetchTopLosers(10, true),
       fetchMostActive(10, true)
     ]);
-    
+
     return {
       topGainers: gainers,
       topLosers: losers,
@@ -191,4 +191,4 @@ export const refreshHomePageData = async () => {
     console.error('Error refreshing home page data:', error);
     throw error;
   }
-}; 
+};

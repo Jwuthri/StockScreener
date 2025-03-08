@@ -16,11 +16,11 @@ const NotificationCenter = () => {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
         }
-        
+
         // Create WebSocket connection
         const wsUrl = API_URL.replace('http://', 'ws://').replace('https://', 'wss://');
         const ws = new WebSocket(`${wsUrl}/ws`);
-        
+
         ws.onopen = () => {
             // Reset reconnect attempts on successful connection
             reconnectAttempts.current = 0;
@@ -29,7 +29,7 @@ const NotificationCenter = () => {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                
+
                 if (data.type === 'new_crossing_stocks' && data.data && data.data.length > 0) {
                     // Create notifications for each new stock
                     const newNotifications = data.data.map(stock => ({
@@ -39,7 +39,7 @@ const NotificationCenter = () => {
                         timestamp: new Date(),
                         stock: stock
                     }));
-                    
+
                     // Add new notifications to the list
                     setNotifications(prev => [...newNotifications, ...prev].slice(0, 10)); // Keep last 10 notifications
                 }
@@ -52,10 +52,10 @@ const NotificationCenter = () => {
             // Only attempt to reconnect if we haven't exceeded max attempts
             if (reconnectAttempts.current < maxReconnectAttempts) {
                 reconnectAttempts.current += 1;
-                
+
                 // Exponential backoff: wait longer between each attempt
                 const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts.current));
-                
+
                 // Set timeout for reconnection
                 reconnectTimeoutRef.current = setTimeout(() => {
                     setSocket(null); // This will trigger useEffect to reconnect
@@ -79,7 +79,7 @@ const NotificationCenter = () => {
     // Keep WebSocket alive
     useEffect(() => {
         if (!socket) return;
-        
+
         const interval = setInterval(() => {
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send('ping');
@@ -97,8 +97,8 @@ const NotificationCenter = () => {
     return (
         <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1060 }}>
             {notifications.map(notification => (
-                <Toast 
-                    key={notification.id} 
+                <Toast
+                    key={notification.id}
                     onClose={() => removeNotification(notification.id)}
                     show={true}
                     delay={10000}
@@ -129,4 +129,4 @@ const NotificationCenter = () => {
     );
 };
 
-export default NotificationCenter; 
+export default NotificationCenter;

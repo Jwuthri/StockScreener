@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  Drawer, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  ListItemIcon, 
-  Box, 
-  Divider, 
+import {
+  Drawer,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Box,
+  Divider,
   Typography,
   useTheme
 } from '@mui/material';
@@ -32,7 +32,7 @@ const StyledListItem = styled(ListItem)(({ theme, active }) => ({
   transition: 'all 0.2s ease',
   backgroundColor: active ? theme.palette.grey[100] : 'transparent',
   '&:hover': {
-    backgroundColor: active 
+    backgroundColor: active
       ? theme.palette.grey[100]
       : theme.palette.grey[50],
   },
@@ -53,15 +53,15 @@ const Sidebar = () => {
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path;
-  
+
   return (
     <Drawer
       variant="permanent"
       sx={{
         width: drawerWidth,
         flexShrink: 0,
-        [`& .MuiDrawer-paper`]: { 
-          width: drawerWidth, 
+        [`& .MuiDrawer-paper`]: {
+          width: drawerWidth,
           boxSizing: 'border-box',
           border: 'none',
           borderRight: `1px solid ${theme.palette.divider}`,
@@ -73,62 +73,62 @@ const Sidebar = () => {
     >
       <Box sx={{ mt: 8, overflow: 'auto', px: 1, py: 2 }}>
         <List component="nav" disablePadding>
-          <StyledListItem 
-            button 
+          <StyledListItem
+            button
             onClick={() => navigate('/')}
             active={isActive('/') ? 1 : 0}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: isActive('/') ? theme.palette.text.primary : theme.palette.text.secondary
             }}>
               <HomeOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Home" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Home"
+              primaryTypographyProps={{
                 fontWeight: isActive('/') ? 600 : 500,
                 color: isActive('/') ? theme.palette.text.primary : theme.palette.text.secondary,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
-          
-          <StyledListItem 
-            button 
+
+          <StyledListItem
+            button
             onClick={() => navigate('/screener')}
             active={isActive('/screener') ? 1 : 0}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: isActive('/screener') ? theme.palette.text.primary : theme.palette.text.secondary
             }}>
               <SearchOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Browse" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Browse"
+              primaryTypographyProps={{
                 fontWeight: isActive('/screener') ? 600 : 500,
                 color: isActive('/screener') ? theme.palette.text.primary : theme.palette.text.secondary,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
-          
-          <StyledListItem 
-            button 
+
+          <StyledListItem
+            button
             onClick={() => navigate('/alerts')}
             active={isActive('/alerts') ? 1 : 0}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: isActive('/alerts') ? theme.palette.text.primary : theme.palette.text.secondary
             }}>
               <NotificationsNoneOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Alerts" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Alerts"
+              primaryTypographyProps={{
                 fontWeight: isActive('/alerts') ? 600 : 500,
                 color: isActive('/alerts') ? theme.palette.text.primary : theme.palette.text.secondary,
                 fontSize: '0.95rem'
@@ -136,106 +136,106 @@ const Sidebar = () => {
             />
           </StyledListItem>
         </List>
-        
+
         <Divider sx={{ my: 2 }} />
-        
+
         <SectionLabel>Lists</SectionLabel>
         <List component="nav" disablePadding>
-          <StyledListItem 
-            button 
+          <StyledListItem
+            button
             onClick={() => navigate('/?filter=watchlist')}
             active={location.pathname === '/' && location.search.includes('watchlist') ? 1 : 0}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: theme.palette.text.secondary
             }}>
               <StarOutlineOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Watchlist" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Watchlist"
+              primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
-          
-          <StyledListItem 
-            button 
+
+          <StyledListItem
+            button
             onClick={() => navigate('/?filter=portfolio')}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: theme.palette.text.secondary
             }}>
               <AccountBalanceWalletOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Portfolio" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Portfolio"
+              primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
         </List>
-        
+
         <Divider sx={{ my: 2 }} />
-        
+
         <SectionLabel>Market Trends</SectionLabel>
         <List component="nav" disablePadding>
-          <StyledListItem 
-            button 
+          <StyledListItem
+            button
             onClick={() => navigate('/?filter=gainers')}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: theme.palette.success.main
             }}>
               <TrendingUpOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Top Gainers" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Top Gainers"
+              primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
-          
-          <StyledListItem 
-            button 
+
+          <StyledListItem
+            button
             onClick={() => navigate('/?filter=losers')}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: theme.palette.error.main
             }}>
               <TrendingDownOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Top Losers" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Top Losers"
+              primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.95rem'
               }}
             />
           </StyledListItem>
-          
-          <StyledListItem 
-            button 
+
+          <StyledListItem
+            button
             onClick={() => navigate('/?filter=mostActive')}
           >
-            <ListItemIcon sx={{ 
-              minWidth: 36, 
+            <ListItemIcon sx={{
+              minWidth: 36,
               color: theme.palette.text.secondary
             }}>
               <ShowChartOutlinedIcon />
             </ListItemIcon>
-            <ListItemText 
-              primary="Most Active" 
-              primaryTypographyProps={{ 
+            <ListItemText
+              primary="Most Active"
+              primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.95rem'
               }}

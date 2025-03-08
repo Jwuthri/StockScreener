@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  TextField, 
-  Button, 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  MenuItem, 
-  Typography, 
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Typography,
   Box,
   CircularProgress,
   Divider,
@@ -25,12 +25,12 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
     alert_type: 'price_above',
     threshold_value: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentPrice, setCurrentPrice] = useState(null);
   const [alertTypes, setAlertTypes] = useState([]);
-  
+
   // Fetch current price and alert types on open
   useEffect(() => {
     if (open && stockSymbol) {
@@ -38,7 +38,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
       fetchAlertTypes();
     }
   }, [open, stockSymbol]);
-  
+
   const fetchCurrentPrice = async () => {
     try {
       setLoading(true);
@@ -51,7 +51,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
       setLoading(false);
     }
   };
-  
+
   const fetchAlertTypes = async () => {
     try {
       const response = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/alerts/types`);
@@ -60,7 +60,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
       console.error('Error fetching alert types:', error);
     }
   };
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setAlertData({
@@ -68,31 +68,31 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
       [name]: value
     });
   };
-  
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
       setError('');
-      
+
       // Validate inputs
       if (!alertData.user_email) {
         setError('Email is required');
         setLoading(false);
         return;
       }
-      
+
       if (!alertData.threshold_value) {
         setError('Threshold value is required');
         setLoading(false);
         return;
       }
-      
+
       // Create alert
       await axios.post(
         `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/alerts/create`,
         alertData
       );
-      
+
       onClose(true); // Close with success
     } catch (error) {
       console.error('Error creating alert:', error);
@@ -101,7 +101,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
       setLoading(false);
     }
   };
-  
+
   return (
     <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -109,7 +109,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
           Create Alert for {stockSymbol}
         </Typography>
       </DialogTitle>
-      
+
       <DialogContent dividers>
         {loading && !currentPrice ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -122,7 +122,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
                 {error}
               </Alert>
             )}
-            
+
             {currentPrice !== null && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="subtitle1" gutterBottom>
@@ -134,7 +134,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
                 <Divider sx={{ my: 2 }} />
               </Box>
             )}
-            
+
             <TextField
               margin="dense"
               label="Email"
@@ -147,7 +147,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
               variant="outlined"
               sx={{ mb: 2 }}
             />
-            
+
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
               <InputLabel id="alert-type-label">Alert Type</InputLabel>
               <Select
@@ -165,7 +165,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
                 ))}
               </Select>
             </FormControl>
-            
+
             <TextField
               margin="dense"
               label="Threshold Value"
@@ -180,7 +180,7 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
                 startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>,
               }}
               helperText={
-                alertData.alert_type === 'price_above' 
+                alertData.alert_type === 'price_above'
                   ? 'You will be alerted when the price goes above this value'
                   : alertData.alert_type === 'price_below'
                   ? 'You will be alerted when the price goes below this value'
@@ -192,17 +192,17 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
           </>
         )}
       </DialogContent>
-      
+
       <DialogActions>
-        <Button 
-          onClick={() => onClose(false)} 
+        <Button
+          onClick={() => onClose(false)}
           color="inherit"
           disabled={loading}
         >
           Cancel
         </Button>
-        <Button 
-          onClick={handleSubmit} 
+        <Button
+          onClick={handleSubmit}
           variant="contained"
           disabled={loading}
           startIcon={loading ? <CircularProgress size={20} /> : null}
@@ -214,4 +214,4 @@ const CreateAlertDialog = ({ open, onClose, stockSymbol = '' }) => {
   );
 };
 
-export default CreateAlertDialog; 
+export default CreateAlertDialog;

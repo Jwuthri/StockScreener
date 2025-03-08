@@ -133,12 +133,12 @@ export const getStocksOpenBelowPrevHigh = async (params = {}) => {
 
     // Merge default params with provided params
     const queryParams = { ...defaultParams, ...params };
-    
+
     // Build query string
     const queryString = Object.entries(queryParams)
       .map(([key, value]) => `${key}=${value}`)
       .join('&');
-    
+
     const response = await api.get(`/api/stocks/screener/open-below-prev-high?${queryString}`);
     return response.data;
   } catch (error) {
@@ -147,4 +147,4 @@ export const getStocksOpenBelowPrevHigh = async (params = {}) => {
   }
 };
 
-export default api; 
+export default api;

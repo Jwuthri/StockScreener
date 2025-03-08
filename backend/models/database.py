@@ -1,17 +1,17 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, ForeignKey, MetaData
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 import datetime
-import os
-from dotenv import load_dotenv
+
 import bcrypt
+from dotenv import load_dotenv
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, scoped_session, sessionmaker
 
 load_dotenv()
 
-POSTGRES_DATABASE_NAME="stock_screener"
-POSTGRES_DATABASE_PASSWORD="postgres"
-POSTGRES_DATABASE_URL="127.0.0.1:5432"
-POSTGRES_DATABASE_USERNAME="postgres"
+POSTGRES_DATABASE_NAME = "stock_screener"
+POSTGRES_DATABASE_PASSWORD = "postgres"
+POSTGRES_DATABASE_URL = "127.0.0.1:5432"
+POSTGRES_DATABASE_USERNAME = "postgres"
 DATABASE_URI = f"postgresql://:{POSTGRES_DATABASE_PASSWORD}:{POSTGRES_DATABASE_PASSWORD}@{POSTGRES_DATABASE_URL}/{POSTGRES_DATABASE_NAME}"
 
 engine = create_engine(DATABASE_URI)
@@ -33,16 +33,17 @@ class User(Base):
     password_hash = Column(String)
     last_login = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
-    
+
     created_at = Column(DateTime, default=datetime.datetime.now)
     # Relationships
     alerts = relationship("Alert", back_populates="user")
-    
+
     def set_password(self, password):
-        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
+        self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
     def check_password(self, password):
-        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+        return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
+
 
 class Stock(Base):
     __tablename__ = "stocks"
@@ -61,6 +62,7 @@ class Stock(Base):
     alerts = relationship("Alert", back_populates="stock")
     price_history = relationship("PriceHistory", back_populates="stock")
 
+
 class Alert(Base):
     __tablename__ = "alerts"
 
@@ -73,10 +75,11 @@ class Alert(Base):
     last_triggered = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.datetime.now)
-    
+
     # Relationships
     user = relationship("User", back_populates="alerts")
     stock = relationship("Stock", back_populates="alerts")
+
 
 class PriceHistory(Base):
     __tablename__ = "price_history"
@@ -96,6 +99,7 @@ class PriceHistory(Base):
     # Relationships
     stock = relationship("Stock", back_populates="price_history")
 
+
 # Get a DB session
 def get_db():
     db = SessionLocal()
@@ -104,23 +108,21 @@ def get_db():
     finally:
         db.close()
 
+
 def initialize_db():
     """Initialize database and create tables if they don't exist."""
     # Create tables - in production, use Alembic migrations instead
     # Base.metadata.create_all(bind=engine)
-    
+
     # Create a default admin user
     db = SessionLocal()
     try:
         admin_user = db.query(User).filter(User.username == "admin").first()
         if not admin_user:
             admin_user = User(
-                username='admin',
-                email='admin@example.com',
-                is_active=True,
-                created_at=datetime.datetime.now()
+                username="admin", email="admin@example.com", is_active=True, created_at=datetime.datetime.now()
             )
-            admin_user.set_password('admin123')  # Set a default password
+            admin_user.set_password("admin123")  # Set a default password
             db.add(admin_user)
             db.commit()
     except Exception as e:

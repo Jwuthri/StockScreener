@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, Typography, Grid, Paper, Card, CardContent, 
-  CardHeader, Divider, List, ListItem, ListItemText, 
+import {
+  Box, Typography, Grid, Paper, Card, CardContent,
+  CardHeader, Divider, List, ListItem, ListItemText,
   ListItemAvatar, Avatar, CircularProgress, Button,
   Tabs, Tab, Alert, Container, Chip
 } from '@mui/material';
@@ -10,9 +10,9 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend, ResponsiveContainer 
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -33,15 +33,15 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [usingDemoData, setUsingDemoData] = useState(false);
   const [stockLimit, setStockLimit] = useState(10);
-  
+
   // Parse the filter from URL query parameters
   const urlParams = new URLSearchParams(location.search);
   const filter = urlParams.get('filter');
-  
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const filterParam = params.get('filter');
-    
+
     if (filterParam) {
       if (['gainers', 'losers', 'most-active'].includes(filterParam)) {
         setActiveTab(filterParam);
@@ -53,74 +53,74 @@ const Dashboard = () => {
       navigate('?filter=gainers', { replace: true });
     }
   }, [location.search, navigate]);
-  
+
   useEffect(() => {
     fetchDashboardData();
   }, [stockLimit]);
-  
+
   const fetchDashboardData = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const [gainersRes, losersRes, activeRes] = await Promise.all([
         axios.get(`${API_URL}/api/stocks/gainers?limit=${stockLimit}`),
         axios.get(`${API_URL}/api/stocks/losers?limit=${stockLimit}`),
         axios.get(`${API_URL}/api/stocks/most-active?limit=${stockLimit}`)
       ]);
-      
+
       // Process each dataset to ensure consistent formatting
       const processStockData = (stocks) => {
         if (!stocks || !Array.isArray(stocks)) return [];
-        
+
         return stocks.map(stock => {
           // Format values properly for display
           return {
             ...stock,
-            price: stock.price_display || 
-                  (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` : 
+            price: stock.price_display ||
+                  (typeof stock.price === 'number' ? `$${stock.price.toFixed(2)}` :
                    typeof stock.price === 'string' ? stock.price : 'N/A'),
-            
+
             // Handle percent change consistently
             change_percent: (() => {
               const pct = stock.percent_change;
               if (pct === null || pct === undefined) return 'N/A';
-              
+
               // If it's already a formatted string with % (from backend)
               if (typeof pct === 'string' && pct.includes('%')) {
                 return pct; // Return as is, it's already formatted
               }
-              
+
               // Otherwise parse and format
               const numPct = typeof pct === 'number' ? pct : parseFloat(pct);
               if (isNaN(numPct)) return 'N/A';
               return `${numPct >= 0 ? '+' : ''}${numPct.toFixed(2)}%`;
             })(),
-            
-            volume: stock.volume_display || 
-                   (typeof stock.volume === 'number' ? 
+
+            volume: stock.volume_display ||
+                   (typeof stock.volume === 'number' ?
                     stock.volume >= 1000000 ? `${(stock.volume / 1000000).toFixed(1)}M` :
                     stock.volume >= 1000 ? `${(stock.volume / 1000).toFixed(1)}K` :
                     stock.volume.toString() : stock.volume || 'N/A')
           };
         });
       };
-      
+
       const processedGainers = processStockData(gainersRes.data.gainers || []);
       const processedLosers = processStockData(losersRes.data.losers || []);
       const processedActive = processStockData(activeRes.data.most_active || []);
-      
+
       setTopGainers(processedGainers);
       setTopLosers(processedLosers);
       setMostActive(processedActive);
-      
+
       setLastUpdated(new Date());
       setUsingDemoData(
-        gainersRes.data.is_demo || 
-        losersRes.data.is_demo || 
+        gainersRes.data.is_demo ||
+        losersRes.data.is_demo ||
         activeRes.data.is_demo
       );
-      
+
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       setError('Error fetching market data. Please try again later.');
@@ -128,11 +128,11 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
-  
+
   const refreshData = () => {
     fetchDashboardData();
   };
-  
+
   // Generate sample price history data for chart
   const generateChartData = () => {
     const data = [];
@@ -148,12 +148,12 @@ const Dashboard = () => {
     }
     return data;
   };
-  
+
   const chartData = generateChartData();
-  
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
-    
+
     // Update URL based on selected tab
     if (newValue === 'gainers') {
       navigate('/?filter=gainers');
@@ -163,7 +163,7 @@ const Dashboard = () => {
       navigate('/?filter=most-active');
     }
   };
-  
+
   const renderStockList = (stocks, loading, error) => {
     if (loading) {
       return (
@@ -192,39 +192,39 @@ const Dashboard = () => {
     return (
       <List disablePadding>
         {stocks.map((stock, index) => (
-          <ListItem 
-            key={index} 
-            button 
-            component={Link} 
+          <ListItem
+            key={index}
+            button
+            component={Link}
             to={`/stock/${stock.symbol}`}
-            sx={{ 
+            sx={{
               borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
               py: 1
             }}
           >
-            <ListItemText 
-              primary={stock.symbol} 
-              secondary={stock.name || 'Unknown'} 
+            <ListItemText
+              primary={stock.symbol}
+              secondary={stock.name || 'Unknown'}
               primaryTypographyProps={{ fontWeight: 'bold' }}
             />
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                 {stock.price}
               </Typography>
-              <Typography 
-                variant="body2" 
+              <Typography
+                variant="body2"
                 color={(() => {
                   // Handle both formatted strings and numeric values
                   const pctStr = stock.change_percent;
                   if (pctStr === 'N/A') return 'text.secondary';
-                  
+
                   // If it's a string with a % sign
                   if (typeof pctStr === 'string') {
                     // Remove any + sign and % sign for parsing
                     const cleanedStr = pctStr.replace('+', '').replace('%', '');
                     return parseFloat(cleanedStr) >= 0 ? 'success.main' : 'error.main';
                   }
-                  
+
                   return 'text.secondary';
                 })()}
               >
@@ -239,47 +239,47 @@ const Dashboard = () => {
       </List>
     );
   };
-  
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Tabs 
-              value={activeTab} 
-              onChange={handleTabChange} 
+            <Tabs
+              value={activeTab}
+              onChange={handleTabChange}
               aria-label="market trend tabs"
               variant="scrollable"
               scrollButtons="auto"
             >
-              <Tab 
-                icon={<ArrowUpwardIcon fontSize="small" />} 
-                iconPosition="start" 
-                label="Top Gainers" 
-                value="gainers" 
+              <Tab
+                icon={<ArrowUpwardIcon fontSize="small" />}
+                iconPosition="start"
+                label="Top Gainers"
+                value="gainers"
               />
-              <Tab 
-                icon={<ArrowDownwardIcon fontSize="small" />} 
-                iconPosition="start" 
-                label="Top Losers" 
-                value="losers" 
+              <Tab
+                icon={<ArrowDownwardIcon fontSize="small" />}
+                iconPosition="start"
+                label="Top Losers"
+                value="losers"
               />
-              <Tab 
-                icon={<ShowChartIcon fontSize="small" />} 
-                iconPosition="start" 
-                label="Most Active" 
-                value="most-active" 
+              <Tab
+                icon={<ShowChartIcon fontSize="small" />}
+                iconPosition="start"
+                label="Most Active"
+                value="most-active"
               />
             </Tabs>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="body2" sx={{ mr: 1 }}>Show:</Typography>
-                <select 
+                <select
                   value={stockLimit}
                   onChange={(e) => {
                     setStockLimit(Number(e.target.value));
                   }}
-                  style={{ 
+                  style={{
                     padding: '4px 8px',
                     borderRadius: '4px',
                     border: '1px solid #ccc'
@@ -291,9 +291,9 @@ const Dashboard = () => {
                   <option value={50}>50</option>
                 </select>
               </Box>
-              <Button 
-                startIcon={<RefreshIcon />} 
-                size="small" 
+              <Button
+                startIcon={<RefreshIcon />}
+                size="small"
                 onClick={refreshData}
                 variant="outlined"
               >
@@ -302,46 +302,46 @@ const Dashboard = () => {
             </Box>
           </Box>
         </Grid>
-        
+
         <Grid item xs={12}>
           {activeTab === 'gainers' && (
             <Paper elevation={1} sx={{ p: 0 }}>
               <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" fontWeight="medium">Top Gainers</Typography>
-                <Chip 
-                  label={`${topGainers.length} stocks`} 
-                  size="small" 
-                  color="success" 
+                <Chip
+                  label={`${topGainers.length} stocks`}
+                  size="small"
+                  color="success"
                   sx={{ fontWeight: 500 }}
                 />
               </Box>
               {renderStockList(topGainers, loading, error)}
             </Paper>
           )}
-          
+
           {activeTab === 'losers' && (
             <Paper elevation={1} sx={{ p: 0 }}>
               <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" fontWeight="medium">Top Losers</Typography>
-                <Chip 
-                  label={`${topLosers.length} stocks`} 
-                  size="small" 
-                  color="error" 
+                <Chip
+                  label={`${topLosers.length} stocks`}
+                  size="small"
+                  color="error"
                   sx={{ fontWeight: 500 }}
                 />
               </Box>
               {renderStockList(topLosers, loading, error)}
             </Paper>
           )}
-          
+
           {activeTab === 'most-active' && (
             <Paper elevation={1} sx={{ p: 0 }}>
               <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" fontWeight="medium">Most Active</Typography>
-                <Chip 
-                  label={`${mostActive.length} stocks`} 
-                  size="small" 
-                  color="primary" 
+                <Chip
+                  label={`${mostActive.length} stocks`}
+                  size="small"
+                  color="primary"
                   sx={{ fontWeight: 500 }}
                 />
               </Box>

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-    Box, 
-    Typography, 
-    TextField, 
-    Button, 
-    Paper, 
+import {
+    Box,
+    Typography,
+    TextField,
+    Button,
+    Paper,
     Alert,
     Link,
     useTheme
@@ -52,14 +52,14 @@ const Register = () => {
             password: !formData.password.trim(),
             confirmPassword: !formData.confirmPassword.trim() || formData.password !== formData.confirmPassword
         };
-        
+
         setFieldErrors(newFieldErrors);
         return !Object.values(newFieldErrors).some(Boolean);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!validateForm()) {
             if (formData.password !== formData.confirmPassword) {
                 setError('Passwords do not match');
@@ -141,9 +141,9 @@ const Register = () => {
                     </Alert>
                 )}
 
-                <Box 
-                    component="form" 
-                    onSubmit={handleSubmit} 
+                <Box
+                    component="form"
+                    onSubmit={handleSubmit}
                     sx={{ width: '100%' }}
                     noValidate // Disable browser's HTML5 validation
                 >
@@ -205,8 +205,8 @@ const Register = () => {
                         type="submit"
                         fullWidth
                         variant="contained"
-                        sx={{ 
-                            mt: 3, 
+                        sx={{
+                            mt: 3,
                             mb: 2,
                             bgcolor: theme.palette.success.main,
                             '&:hover': {
@@ -229,4 +229,4 @@ const Register = () => {
     );
 };
 
-export default Register; 
+export default Register;

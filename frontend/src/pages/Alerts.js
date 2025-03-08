@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, Typography, TextField, Button, Paper, Table, 
-  TableBody, TableCell, TableContainer, TableHead, 
-  TableRow, CircularProgress, Switch, Dialog, 
+import {
+  Box, Typography, TextField, Button, Paper, Table,
+  TableBody, TableCell, TableContainer, TableHead,
+  TableRow, CircularProgress, Switch, Dialog,
   DialogTitle, DialogContent, DialogActions, FormControl,
   InputLabel, Select, MenuItem, IconButton, Alert, useTheme
 } from '@mui/material';
@@ -24,7 +24,7 @@ const Alerts = () => {
   const theme = useTheme();
   const [searchParams] = useSearchParams();
   const stockSymbol = searchParams.get('stock');
-  
+
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -34,14 +34,14 @@ const Alerts = () => {
   const [threshold, setThreshold] = useState('');
   const [stocks, setStocks] = useState([]);
   const [error, setError] = useState('');
-  
+
   // Fetch user alerts when email changes
   useEffect(() => {
     if (email) {
       fetchAlerts();
     }
   }, [email]);
-  
+
   // Handle stock symbol from query params
   useEffect(() => {
     if (stockSymbol) {
@@ -49,7 +49,7 @@ const Alerts = () => {
       setOpenDialog(true);
     }
   }, [stockSymbol]);
-  
+
   // Fetch available stocks
   useEffect(() => {
     const fetchStocks = async () => {
@@ -60,14 +60,14 @@ const Alerts = () => {
         console.error('Error fetching stocks:', error);
       }
     };
-    
+
     fetchStocks();
   }, []);
-  
+
   const fetchAlerts = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const response = await axios.get(`${API_URL}/api/alerts?email=${email}`);
       setAlerts(response.data.alerts);
@@ -78,16 +78,16 @@ const Alerts = () => {
       setLoading(false);
     }
   };
-  
+
   const handleCreateAlert = async () => {
     if (!email || !selectedStock || !alertType || !threshold) {
       setError('Please fill in all required fields.');
       return;
     }
-    
+
     setLoading(true);
     setError('');
-    
+
     try {
       await axios.post(`${API_URL}/api/alerts`, {
         user_email: email,
@@ -95,7 +95,7 @@ const Alerts = () => {
         alert_type: alertType,
         threshold_value: parseFloat(threshold)
       });
-      
+
       // Refresh the alerts list
       fetchAlerts();
       setOpenDialog(false);
@@ -110,20 +110,20 @@ const Alerts = () => {
       setLoading(false);
     }
   };
-  
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setError('');
   };
-  
+
   const handleToggleAlert = async (alertId, isActive) => {
     try {
       await axios.put(`${API_URL}/api/alerts/${alertId}`, {
         is_active: !isActive
       });
-      
+
       // Update the alert in the local state
-      setAlerts(alerts.map(alert => 
+      setAlerts(alerts.map(alert =>
         alert.id === alertId ? { ...alert, is_active: !isActive } : alert
       ));
     } catch (error) {
@@ -131,11 +131,11 @@ const Alerts = () => {
       setError('Failed to update alert status. Please try again.');
     }
   };
-  
+
   const handleDeleteAlert = async (alertId) => {
     try {
       await axios.delete(`${API_URL}/api/alerts/${alertId}`);
-      
+
       // Remove the alert from the local state
       setAlerts(alerts.filter(alert => alert.id !== alertId));
     } catch (error) {
@@ -143,13 +143,13 @@ const Alerts = () => {
       setError('Failed to delete alert. Please try again.');
     }
   };
-  
+
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
         Stock Price Alerts
       </Typography>
-      
+
       {/* Email input section */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <TextField
@@ -159,8 +159,8 @@ const Alerts = () => {
           onChange={(e) => setEmail(e.target.value)}
           sx={{ mr: 2, flexGrow: 1 }}
         />
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           color="primary"
           onClick={fetchAlerts}
           disabled={!email}
@@ -178,14 +178,14 @@ const Alerts = () => {
           New Alert
         </Button>
       </Box>
-      
+
       {/* Error message */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-      
+
       {/* Loading indicator */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -224,8 +224,8 @@ const Alerts = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <IconButton 
-                          color="error" 
+                        <IconButton
+                          color="error"
                           onClick={() => handleDeleteAlert(alert.id)}
                           size="small"
                         >
@@ -250,7 +250,7 @@ const Alerts = () => {
           )}
         </>
       )}
-      
+
       {/* Create Alert Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Create New Alert</DialogTitle>
@@ -270,7 +270,7 @@ const Alerts = () => {
                 ))}
               </Select>
             </FormControl>
-            
+
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Alert Type</InputLabel>
               <Select
@@ -285,7 +285,7 @@ const Alerts = () => {
                 ))}
               </Select>
             </FormControl>
-            
+
             <TextField
               fullWidth
               label="Threshold Value"
@@ -299,9 +299,9 @@ const Alerts = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button 
-            onClick={handleCreateAlert} 
-            variant="contained" 
+          <Button
+            onClick={handleCreateAlert}
+            variant="contained"
             color="primary"
             disabled={!email || !selectedStock || !alertType || !threshold}
           >

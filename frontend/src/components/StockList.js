@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  List, ListItem, ListItemText, Divider, 
+import {
+  List, ListItem, ListItemText, Divider,
   Typography, Box, CircularProgress, Chip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 const StockList = ({ stocks, loading, emptyMessage }) => {
   const navigate = useNavigate();
-  
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -15,7 +15,7 @@ const StockList = ({ stocks, loading, emptyMessage }) => {
       </Box>
     );
   }
-  
+
   if (!stocks || stocks.length === 0) {
     return (
       <Box sx={{ p: 2, textAlign: 'center' }}>
@@ -23,14 +23,14 @@ const StockList = ({ stocks, loading, emptyMessage }) => {
       </Box>
     );
   }
-  
+
   return (
     <List disablePadding>
       {stocks.map((stock, index) => (
         <React.Fragment key={stock.symbol || `stock-${index}`}>
           {index > 0 && <Divider />}
-          <ListItem 
-            button 
+          <ListItem
+            button
             onClick={() => navigate(`/stock/${stock.symbol}`)}
             sx={{ py: 1.5 }}
           >
@@ -50,11 +50,11 @@ const StockList = ({ stocks, loading, emptyMessage }) => {
                   <Typography variant="body2" noWrap sx={{ maxWidth: '60%' }}>
                     {stock.name}
                   </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      color: stock.change_percent?.includes('-') 
-                        ? 'error.main' 
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: stock.change_percent?.includes('-')
+                        ? 'error.main'
                         : 'success.main'
                     }}
                   >
@@ -70,4 +70,4 @@ const StockList = ({ stocks, loading, emptyMessage }) => {
   );
 };
 
-export default StockList; 
+export default StockList;

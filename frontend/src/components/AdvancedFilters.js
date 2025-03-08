@@ -41,11 +41,11 @@ const AdvancedFilters = ({
 }) => {
   return (
     <>
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        p: 2, 
+        p: 2,
         backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
         borderRadius: 2,
         mb: 2,
@@ -57,19 +57,19 @@ const AdvancedFilters = ({
             Advanced Filters
           </Typography>
         </Box>
-        <Switch 
+        <Switch
           checked={showAdvanced}
           onChange={(e) => setShowAdvanced(e.target.checked)}
           color="primary"
         />
       </Box>
-      
+
       {showAdvanced && (
         <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
           <Typography variant="subtitle1" gutterBottom>
             Narrow down stocks:
           </Typography>
-          
+
           <Tabs
             value={selectedFilterTab}
             onChange={handleFilterTabChange}
@@ -83,7 +83,7 @@ const AdvancedFilters = ({
             <Tab label="Volume" value="volume" />
             <Tab label="Sector" value="sector" />
           </Tabs>
-          
+
           {selectedFilterTab === "price" && (
             <Box>
               <Box sx={{ mb: 3 }}>
@@ -99,7 +99,7 @@ const AdvancedFilters = ({
                   <ToggleButton value="above">Above Price</ToggleButton>
                   <ToggleButton value="below">Below Price</ToggleButton>
                 </ToggleButtonGroup>
-                
+
                 {priceFilterType === "range" && (
                   <>
                     <Typography gutterBottom>
@@ -116,7 +116,7 @@ const AdvancedFilters = ({
                     />
                   </>
                 )}
-                
+
                 {priceFilterType === "above" && (
                   <TextField
                     label="Price Above"
@@ -130,7 +130,7 @@ const AdvancedFilters = ({
                     }}
                   />
                 )}
-                
+
                 {priceFilterType === "below" && (
                   <TextField
                     label="Price Below"
@@ -147,7 +147,7 @@ const AdvancedFilters = ({
               </Box>
             </Box>
           )}
-          
+
           {selectedFilterTab === "change" && (
             <Box>
               <Box sx={{ mb: 3 }}>
@@ -163,7 +163,7 @@ const AdvancedFilters = ({
                   <ToggleButton value="up">% Up Only</ToggleButton>
                   <ToggleButton value="down">% Down Only</ToggleButton>
                 </ToggleButtonGroup>
-                
+
                 {changeFilterType === "any" && (
                   <>
                     <Typography gutterBottom>
@@ -180,7 +180,7 @@ const AdvancedFilters = ({
                     />
                   </>
                 )}
-                
+
                 {changeFilterType === "up" && (
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
@@ -211,7 +211,7 @@ const AdvancedFilters = ({
                     </Grid>
                   </Grid>
                 )}
-                
+
                 {changeFilterType === "down" && (
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
@@ -245,7 +245,7 @@ const AdvancedFilters = ({
               </Box>
             </Box>
           )}
-          
+
           {selectedFilterTab === "volume" && (
             <Box>
               <Typography gutterBottom>
@@ -261,7 +261,7 @@ const AdvancedFilters = ({
                 step={10000}
                 scale={(x) => x}
               />
-              
+
               <Grid container spacing={2} sx={{ mt: 2 }}>
                 <Grid item xs={6}>
                   <TextField
@@ -290,7 +290,7 @@ const AdvancedFilters = ({
               </Grid>
             </Box>
           )}
-          
+
           {selectedFilterTab === "sector" && (
             <Box sx={{ p: 1 }}>
               <Grid container spacing={2}>
@@ -311,7 +311,7 @@ const AdvancedFilters = ({
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
                     <InputLabel>Industry</InputLabel>
@@ -329,7 +329,7 @@ const AdvancedFilters = ({
                     </Select>
                   </FormControl>
                 </Grid>
-                
+
                 <Grid item xs={12} md={12} sx={{ mt: 2 }}>
                   <FormControl fullWidth>
                     <InputLabel>Exchange</InputLabel>
@@ -356,4 +356,4 @@ const AdvancedFilters = ({
   );
 };
 
-export default AdvancedFilters; 
+export default AdvancedFilters;
