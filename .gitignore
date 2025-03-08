@@ -3,6 +3,8 @@
 *.py[cod]
 *.pyc
 *cpython*
+backend/*/__pycache__/
+backend/**.pyc
 
 # C extensions
 *.so
