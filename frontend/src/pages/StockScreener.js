@@ -761,83 +761,220 @@ const StockScreener = () => {
   // Add new state for diff range
   const [diffRange, setDiffRange] = useState([-50, 50]);
   
-  // Fetch popular stocks on component mount
-  useEffect(() => {
-    const fetchPopularStocks = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${API_URL}/api/stocks/popular`);
-        
-        // Extract unique sectors for filter
-        const uniqueSectors = [...new Set(response.data.popular_stocks
-          .filter(stock => stock.sector)
-          .map(stock => stock.sector))];
-        setSectors(uniqueSectors);
-        
-        // Extract unique industries for filter if available
-        const uniqueIndustries = [...new Set(response.data.popular_stocks
-          .filter(stock => stock.industry)
-          .map(stock => stock.industry))];
-        setIndustries(uniqueIndustries);
-        
-        setStocks(response.data.popular_stocks);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching popular stocks:', error);
-        setLoading(false);
-      }
-    };
-    
-    fetchPopularStocks();
-  }, []);
+  // Add new state for cached data
+  const [cachedData, setCachedData] = useState({
+    positiveCandles: null,
+    negativeCandles: null,
+    prevDayHigh: null,
+    prevDayLow: null,
+    openBelowPrevHigh: null
+  });
+
+  // DEFINE ALL HANDLER FUNCTIONS HERE, BEFORE THEY'RE USED
   
-  // Handle search submission
-  const handleSearchSubmit = async (symbol = searchQuery) => {
-    if (!symbol) return;
-    
-    // Add to recent searches if not already present
-    if (!recentSearches.includes(symbol)) {
-      const updatedRecentSearches = [symbol, ...recentSearches].slice(0, 5);
-      setRecentSearches(updatedRecentSearches);
-      localStorage.setItem('recentStockSearches', JSON.stringify(updatedRecentSearches));
-    }
-    
-    // Execute search
-    try {
-      setLoading(true);
-      setError('');
-      
-      const response = await axios.get(`${API_URL}/api/stocks/info/${symbol}`);
-      if (response.data) {
-        setStocks([response.data]);
-      } else {
-        setStocks([]);
-        setError(`No results found for "${symbol}"`);
-      }
-      
-      setLastUpdated(new Date());
-      setSearchQuery('');
-    } catch (error) {
-      console.error('Error searching for stock:', error);
-      setError(`Error searching for "${symbol}". Please try again.`);
-      setStocks([]);
-    } finally {
-      setLoading(false);
+  // Handle filter tab change
+  const handleFilterTabChange = (event, newValue) => {
+    setSelectedFilterTab(newValue);
+  };
+
+  // Handle price filter type change
+  const handlePriceFilterTypeChange = (event, newValue) => {
+    if (newValue !== null) {
+      setPriceFilterType(newValue);
     }
   };
+
+  // Handle change filter type change
+  const handleChangeFilterTypeChange = (event, newValue) => {
+    if (newValue !== null) {
+      setChangeFilterType(newValue);
+    }
+  };
+
+  // Handle volume range change
+  const handleVolumeRangeChange = (event, newValue) => {
+    const cleanValues = newValue.map(val => (
+      typeof val === 'string' ? Number(val.replace(/,/g, '')) : val
+    ));
+    setVolumeRange(cleanValues);
+  };
+
+  // Handle manual volume input change
+  const handleVolumeInputChange = (index, event) => {
+    const value = event.target.value;
+    const numericValue = Number(String(value).replace(/,/g, ''));
+    
+    if (index === 0) {
+      setVolumeRange([numericValue, volumeRange[1]]);
+    } else {
+      setVolumeRange([volumeRange[0], numericValue]);
+    }
+  };
+
+  // Handle industry change
+  const handleIndustryChange = (e) => {
+    setIndustry(e.target.value);
+  };
+
+  // Handle exchange change
+  const handleExchangeChange = (e) => {
+    setExchange(e.target.value);
+  };
+
+  // Handle max results change
+  const handleMaxResultsChange = (event, newValue) => {
+    setMaxResults(newValue);
+  };
+
+  // Values for max results slider
+  const maxResultsMarks = [
+    { value: 5, label: '5' },
+    { value: 15, label: '15' },
+    { value: 25, label: '25' },
+    { value: 50, label: '50' },
+    { value: 75, label: '75' },
+    { value: 100, label: '100' },
+  ];
+
+  // Handle timeframe change
+  const handleTimeframeChange = (e) => {
+    setTimeframe(e.target.value);
+  };
+
+  // Handle number of candles change
+  const handleNumCandlesChange = (e) => {
+    setNumCandles(Number(e.target.value));
+  };
+
+  // Handle sector change
+  const handleSectorChange = (e) => {
+    setSector(e.target.value);
+  };
+
+  // Handle price range change
+  const handlePriceRangeChange = (event, newValue) => {
+    setPriceRange(newValue);
+  };
+
+  // Handle change range change
+  const handleChangeRangeChange = (event, newValue) => {
+    setChangeRange(newValue);
+  };
+
+  // Handle diff range change
+  const handleDiffRangeChange = (event, newValue) => {
+    setDiffRange(newValue);
+  };
+
+  // Navigation functions
+  const navigateToStockDetails = (symbol) => {
+    navigate(`/stock/${symbol}`);
+  };
+
+  const navigateToAlerts = (symbol) => {
+    navigate(`/alerts?stock=${symbol}`);
+  };
+
+  // Formatting helper functions
+  const formatPercentage = (value) => {
+    if (value === "N/A" || value == null) return "N/A";
+    const num = parseFloat(value);
+    return isNaN(num) ? "N/A" : `${num.toFixed(2)}%`;
+  };
   
-  // Load recent searches from localStorage on mount
-  useEffect(() => {
-    const savedSearches = localStorage.getItem('recentStockSearches');
-    if (savedSearches) {
+  const formatPrice = (value) => {
+    if (value === "N/A" || value == null) return "N/A";
+    const num = parseFloat(value);
+    return isNaN(num) ? "N/A" : `$${num.toFixed(2)}`;
+  };
+  
+  const formatVolume = (value) => {
+    if (typeof value === 'string' && (value.includes('K') || value.includes('M') || value.includes('B'))) {
+      return value;
+    }
+    if (!value) {
+      return 'N/A';
+    }
+    
+    const num = parseFloat(value);
+    if (isNaN(num)) return 'N/A';
+    
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    } else if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    
+    return value.toString();
+  };
+
+  // Process API response data to standardize the format for display
+  const processStockData = (stockData) => {
+    return stockData.map(stock => ({
+      ...stock,
+      price: stock.price_display || 
+             (typeof stock.price === 'number' ? formatPrice(stock.price) : 'N/A'),
+      
+      change_percent: stock.change_percent_display || 
+                     (typeof stock.change_percent === 'number' ? formatPercentage(stock.change_percent) : 'N/A'),
+      
+      volume: stock.volume_display || 
+             (typeof stock.volume === 'number' ? formatVolume(stock.volume) : 'N/A')
+    }));
+  };
+
+  // Cache functions
+  const getCacheKey = (screenerType) => {
+    const baseKey = `stockScreener_${screenerType}`;
+    
+    // Add relevant parameters to the cache key
+    switch (screenerType) {
+      case 'positiveCandles':
+      case 'negativeCandles':
+        return `${baseKey}_${timeframe}_${numCandles}`;
+      default:
+        return baseKey;
+    }
+  };
+
+  const saveToCache = (screenerType, data) => {
+    const cacheKey = getCacheKey(screenerType);
+    const cacheData = {
+      timestamp: new Date().getTime(),
+      data: data,
+      lastUpdated: new Date()
+    };
+    
+    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    setCachedData(prev => ({
+      ...prev,
+      [screenerType]: cacheData
+    }));
+  };
+
+  const loadFromCache = (screenerType) => {
+    const cacheKey = getCacheKey(screenerType);
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
       try {
-        setRecentSearches(JSON.parse(savedSearches));
-      } catch (e) {
-        console.error('Error parsing saved searches:', e);
+        const parsedCache = JSON.parse(cached);
+        // Check if cache is less than 5 minutes old
+        const cacheAge = new Date().getTime() - parsedCache.timestamp;
+        if (cacheAge < 5 * 60 * 1000) { // 5 minutes
+          setStocks(parsedCache.data);
+          setLastUpdated(new Date(parsedCache.lastUpdated));
+          return true;
+        }
+      } catch (error) {
+        console.error('Error parsing cache:', error);
+        // If there's an error parsing the cache, remove it
+        localStorage.removeItem(cacheKey);
       }
     }
-  }, []);
-  
+    return false;
+  };
+
   // Helper function to get filter parameters based on the current advanced filter settings
   const getAdvancedFilterParams = (showAdvanced) => {
     const params = {
@@ -897,116 +1034,18 @@ const StockScreener = () => {
     
     return params;
   };
-  
-  // Function to handle filter search
-  const handleFilterSearch = async () => {
-    // Determine which screener is active and call the appropriate search function
-    if (showPositiveCandles) {
-      return handlePositiveCandlesSearch();
-    } else if (showNegativeCandles) {
-      return handleNegativeCandlesSearch();
-    } else if (showPrevDayHighCross) {
-      return handlePrevDayHighCrossSearch();
-    } else if (showPrevDayLowCross) {
-      return handlePrevDayLowCrossSearch();
-    } else if (showOpenBelowPrevHigh) {
-      return handleOpenBelowPrevHighSearch();
+
+  // Search functions
+  const handlePositiveCandlesSearch = async (forceRefresh = false) => {
+    if (!forceRefresh && loadFromCache('positiveCandles')) {
+      return;
     }
-  };
-  
-  const handleSectorChange = (e) => {
-    setSector(e.target.value);
-  };
-  
-  const handlePriceRangeChange = (event, newValue) => {
-    setPriceRange(newValue);
-  };
-  
-  const handleChangeRangeChange = (event, newValue) => {
-    setChangeRange(newValue);
-  };
-  
-  const navigateToStockDetails = (symbol) => {
-    navigate(`/stock/${symbol}`);
-  };
-  
-  const navigateToAlerts = (symbol) => {
-    navigate(`/alerts?stock=${symbol}`);
-  };
-  
-  const refreshData = async () => {
-    setLoading(true);
-    if (showPositiveCandles) {
-      await handlePositiveCandlesSearch();
-    } else if (showNegativeCandles) {
-      await handleNegativeCandlesSearch();
-    } else if (showPrevDayHighCross) {
-      await handlePrevDayHighCrossSearch();
-    } else if (showPrevDayLowCross) {
-      await handlePrevDayLowCrossSearch();
-    } else if (showOpenBelowPrevHigh) {
-      await handleOpenBelowPrevHighSearch();
-    }
-    setLastUpdated(new Date());
-    setLoading(false);
-  };
-  
-  // Formatting helper functions
-  const formatPercentage = (value) => {
-    if (value === "N/A" || value == null) return "N/A";
-    const num = parseFloat(value);
-    return isNaN(num) ? "N/A" : `${num.toFixed(2)}%`;
-  };
-  
-  const formatPrice = (value) => {
-    if (value === "N/A" || value == null) return "N/A";
-    const num = parseFloat(value);
-    return isNaN(num) ? "N/A" : `$${num.toFixed(2)}`;
-  };
-  
-  const formatVolume = (value) => {
-    if (typeof value === 'string' && (value.includes('K') || value.includes('M') || value.includes('B'))) {
-      return value;
-    }
-    if (!value) {
-      return 'N/A';
-    }
-    
-    const num = parseFloat(value);
-    if (isNaN(num)) return 'N/A';
-    
-    if (num >= 1000000) {
-      return `${(num / 1000000).toFixed(1)}M`;
-    } else if (num >= 1000) {
-      return `${(num / 1000).toFixed(1)}K`;
-    }
-    
-    return value.toString();
-  };
-  
-  // Process API response data to standardize the format for display
-  const processStockData = (stockData) => {
-    return stockData.map(stock => ({
-      ...stock,
-      price: stock.price_display || 
-             (typeof stock.price === 'number' ? formatPrice(stock.price) : 'N/A'),
-      
-      change_percent: stock.change_percent_display || 
-                     (typeof stock.change_percent === 'number' ? formatPercentage(stock.change_percent) : 'N/A'),
-      
-      volume: stock.volume_display || 
-             (typeof stock.volume === 'number' ? formatVolume(stock.volume) : 'N/A')
-    }));
-  };
-  
-  // API search functions
-  const handlePositiveCandlesSearch = async () => {
+
     try {
       setLoading(true);
       setError('');
       
       const endpoint = `${API_URL}/api/stocks/screener/consecutive-positive`;
-      
       const params = {
         ...getAdvancedFilterParams(showAdvancedInPC),
         timeframe,
@@ -1021,6 +1060,7 @@ const StockScreener = () => {
         const processedStocks = processStockData(response.data.stocks);
         setStocks(processedStocks);
         setRawStocksData(response.data.stocks);
+        saveToCache('positiveCandles', processedStocks);
       } else {
         setStocks([]);
         setRawStocksData([]);
@@ -1037,113 +1077,12 @@ const StockScreener = () => {
       setLoading(false);
     }
   };
-  
-  const handleTimeframeChange = (e) => {
-    setTimeframe(e.target.value);
-  };
-  
-  const handleNumCandlesChange = (e) => {
-    setNumCandles(Number(e.target.value));
-  };
-  
-  const handlePrevDayHighCrossSearch = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-high`;
-      const params = getAdvancedFilterParams(showAdvancedInPDHC);
-      
-      console.log("Searching for stocks crossing above previous day high with params:", params);
-      
-      const response = await axios.get(endpoint, { params });
-      
-      if (response.data && response.data.stocks) {
-        const processedStocks = processStockData(response.data.stocks);
-        setStocks(processedStocks);
-        setRawStocksData(response.data.stocks);
-      } else {
-        setStocks([]);
-        setRawStocksData([]);
-        setError('No stocks found crossing above previous day high. Try adjusting your parameters.');
-      }
-      
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Error finding stocks crossing above previous day high:', error);
-      setError('Error fetching stocks crossing above previous day high.');
-      setStocks([]);
-      setRawStocksData([]);
-    } finally {
-      setLoading(false);
+
+  const handleNegativeCandlesSearch = async (forceRefresh = false) => {
+    if (!forceRefresh && loadFromCache('negativeCandles')) {
+      return;
     }
-  };
-  
-  // Handle volume range change
-  const handleVolumeRangeChange = (event, newValue) => {
-    const cleanValues = newValue.map(val => (
-      typeof val === 'string' ? Number(val.replace(/,/g, '')) : val
-    ));
-    setVolumeRange(cleanValues);
-  };
-  
-  // Handle manual volume input change
-  const handleVolumeInputChange = (index, event) => {
-    const value = event.target.value;
-    const numericValue = Number(String(value).replace(/,/g, ''));
-    
-    if (index === 0) {
-      setVolumeRange([numericValue, volumeRange[1]]);
-    } else {
-      setVolumeRange([volumeRange[0], numericValue]);
-    }
-  };
-  
-  // Handle industry change
-  const handleIndustryChange = (e) => {
-    setIndustry(e.target.value);
-  };
-  
-  // Handle exchange change
-  const handleExchangeChange = (e) => {
-    setExchange(e.target.value);
-  };
-  
-  // Handle price filter type change
-  const handlePriceFilterTypeChange = (event, newValue) => {
-    if (newValue !== null) {
-      setPriceFilterType(newValue);
-    }
-  };
-  
-  // Handle change filter type change
-  const handleChangeFilterTypeChange = (event, newValue) => {
-    if (newValue !== null) {
-      setChangeFilterType(newValue);
-    }
-  };
-  
-  // Handle filter tab change
-  const handleFilterTabChange = (event, newValue) => {
-    setSelectedFilterTab(newValue);
-  };
-  
-  // Handle max results change
-  const handleMaxResultsChange = (event, newValue) => {
-    setMaxResults(newValue);
-  };
-  
-  // Values for max results slider
-  const maxResultsMarks = [
-    { value: 5, label: '5' },
-    { value: 15, label: '15' },
-    { value: 25, label: '25' },
-    { value: 50, label: '50' },
-    { value: 75, label: '75' },
-    { value: 100, label: '100' },
-  ];
-  
-  const handleNegativeCandlesSearch = async () => {
+
     try {
       setLoading(true);
       setError('');
@@ -1164,6 +1103,7 @@ const StockScreener = () => {
         const processedStocks = processStockData(response.data.stocks);
         setStocks(processedStocks);
         setRawStocksData(response.data.stocks);
+        saveToCache('negativeCandles', processedStocks);
       } else {
         setStocks([]);
         setRawStocksData([]);
@@ -1180,8 +1120,50 @@ const StockScreener = () => {
       setLoading(false);
     }
   };
-  
-  const handlePrevDayLowCrossSearch = async () => {
+
+  const handlePrevDayHighCrossSearch = async (forceRefresh = false) => {
+    if (!forceRefresh && loadFromCache('prevDayHigh')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      const endpoint = `${API_URL}/api/stocks/screener/crossing-prev-day-high`;
+      const params = getAdvancedFilterParams(showAdvancedInPDHC);
+      
+      console.log("Searching for stocks crossing above previous day high with params:", params);
+      
+      const response = await axios.get(endpoint, { params });
+      
+      if (response.data && response.data.stocks) {
+        const processedStocks = processStockData(response.data.stocks);
+        setStocks(processedStocks);
+        setRawStocksData(response.data.stocks);
+        saveToCache('prevDayHigh', processedStocks);
+      } else {
+        setStocks([]);
+        setRawStocksData([]);
+        setError('No stocks found crossing above previous day high. Try adjusting your parameters.');
+      }
+      
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error finding stocks crossing above previous day high:', error);
+      setError('Error fetching stocks crossing above previous day high.');
+      setStocks([]);
+      setRawStocksData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrevDayLowCrossSearch = async (forceRefresh = false) => {
+    if (!forceRefresh && loadFromCache('prevDayLow')) {
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -1197,6 +1179,7 @@ const StockScreener = () => {
         const processedStocks = processStockData(response.data.stocks);
         setStocks(processedStocks);
         setRawStocksData(response.data.stocks);
+        saveToCache('prevDayLow', processedStocks);
       } else {
         setStocks([]);
         setRawStocksData([]);
@@ -1213,8 +1196,12 @@ const StockScreener = () => {
       setLoading(false);
     }
   };
-  
-  const handleOpenBelowPrevHighSearch = async () => {
+
+  const handleOpenBelowPrevHighSearch = async (forceRefresh = false) => {
+    if (!forceRefresh && loadFromCache('openBelowPrevHigh')) {
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -1249,6 +1236,7 @@ const StockScreener = () => {
         
         setStocks(formattedStocks);
         setRawStocksData(response.data.stocks);
+        saveToCache('openBelowPrevHigh', formattedStocks);
         setLastUpdated(new Date());
       } else {
         setError('No stocks found matching your criteria.');
@@ -1264,12 +1252,145 @@ const StockScreener = () => {
       setLoading(false);
     }
   };
-  
-  // Add handler for diff range changes
-  const handleDiffRangeChange = (event, newValue) => {
-    setDiffRange(newValue);
+
+  // Handle search submission
+  const handleSearchSubmit = async (symbol = searchQuery) => {
+    if (!symbol) return;
+    
+    // Add to recent searches if not already present
+    if (!recentSearches.includes(symbol)) {
+      const updatedRecentSearches = [symbol, ...recentSearches].slice(0, 5);
+      setRecentSearches(updatedRecentSearches);
+      localStorage.setItem('recentStockSearches', JSON.stringify(updatedRecentSearches));
+    }
+    
+    // Execute search
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await axios.get(`${API_URL}/api/stocks/info/${symbol}`);
+      if (response.data) {
+        setStocks([response.data]);
+      } else {
+        setStocks([]);
+        setError(`No results found for "${symbol}"`);
+      }
+      
+      setLastUpdated(new Date());
+      setSearchQuery('');
+    } catch (error) {
+      console.error('Error searching for stock:', error);
+      setError(`Error searching for "${symbol}". Please try again.`);
+      setStocks([]);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Function to handle filter search
+  const handleFilterSearch = async () => {
+    // Determine which screener is active and call the appropriate search function
+    if (showPositiveCandles) {
+      return handlePositiveCandlesSearch();
+    } else if (showNegativeCandles) {
+      return handleNegativeCandlesSearch();
+    } else if (showPrevDayHighCross) {
+      return handlePrevDayHighCrossSearch();
+    } else if (showPrevDayLowCross) {
+      return handlePrevDayLowCrossSearch();
+    } else if (showOpenBelowPrevHigh) {
+      return handleOpenBelowPrevHighSearch();
+    }
+  };
+
+  // Refresh data function
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      if (showPositiveCandles) {
+        await handlePositiveCandlesSearch(true);
+      } else if (showNegativeCandles) {
+        await handleNegativeCandlesSearch(true);
+      } else if (showPrevDayHighCross) {
+        await handlePrevDayHighCrossSearch(true);
+      } else if (showPrevDayLowCross) {
+        await handlePrevDayLowCrossSearch(true);
+      } else if (showOpenBelowPrevHigh) {
+        await handleOpenBelowPrevHighSearch(true);
+      }
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setError('Error refreshing data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Effect to load cached data when switching between screeners
+  useEffect(() => {
+    if (showPositiveCandles) {
+      loadFromCache('positiveCandles');
+    } else if (showNegativeCandles) {
+      loadFromCache('negativeCandles');
+    } else if (showPrevDayHighCross) {
+      loadFromCache('prevDayHigh');
+    } else if (showPrevDayLowCross) {
+      loadFromCache('prevDayLow');
+    } else if (showOpenBelowPrevHigh) {
+      loadFromCache('openBelowPrevHigh');
+    }
+  }, [
+    showPositiveCandles,
+    showNegativeCandles,
+    showPrevDayHighCross,
+    showPrevDayLowCross,
+    showOpenBelowPrevHigh
+  ]);
+
+  // Fetch popular stocks on component mount
+  useEffect(() => {
+    const fetchPopularStocks = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_URL}/api/stocks/popular`);
+        
+        // Extract unique sectors for filter
+        const uniqueSectors = [...new Set(response.data.popular_stocks
+          .filter(stock => stock.sector)
+          .map(stock => stock.sector))];
+        setSectors(uniqueSectors);
+        
+        // Extract unique industries for filter if available
+        const uniqueIndustries = [...new Set(response.data.popular_stocks
+          .filter(stock => stock.industry)
+          .map(stock => stock.industry))];
+        setIndustries(uniqueIndustries);
+        
+        setStocks(response.data.popular_stocks);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching popular stocks:', error);
+        setLoading(false);
+      }
+    };
+    
+    fetchPopularStocks();
+  }, []);
   
+  // Load recent searches from localStorage on mount
+  useEffect(() => {
+    const savedSearches = localStorage.getItem('recentStockSearches');
+    if (savedSearches) {
+      try {
+        setRecentSearches(JSON.parse(savedSearches));
+      } catch (e) {
+        console.error('Error parsing saved searches:', e);
+      }
+    }
+  }, []);
+
   // Shared filter props for advanced filters component
   const advancedFiltersProps = {
     selectedFilterTab,
@@ -1717,7 +1838,7 @@ const StockScreener = () => {
                     fullWidth
                     variant="contained"
                     color="primary"
-                    onClick={handlePrevDayHighCrossSearch}
+                    onClick={handleOpenBelowPrevHighSearch}
                     disabled={loading}
                     startIcon={loading ? <CircularProgress size={20} /> : <SearchIcon />}
                     sx={{ height: '56px' }}

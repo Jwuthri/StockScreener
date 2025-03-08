@@ -1803,7 +1803,6 @@ def get_stocks_with_open_below_prev_day_high(limit: int = 100,
         logger.error(f"Error screening for stocks with open below previous day high: {str(e)}")
         return []
 
-
 def get_stocks_with_filters_no_post_filters(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
