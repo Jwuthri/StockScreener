@@ -2280,3 +2280,95 @@ def get_stocks_with_filters_no_post_filters(
     except Exception as e:
         logger.error(f"Error fetching filtered stocks: {str(e)}")
         return []
+
+
+def get_stock_price_tv(symbol: str) -> Dict[str, Any]:
+    """
+    Get detailed information for a stock from TradingView.
+    """
+    try:
+        # Check if symbol is None or empty
+        if not symbol:
+            logger.warning("Attempted to fetch stock details with None or empty symbol")
+            return {
+                "symbol": None,
+                "price": None,
+                "change": None,
+                "volume": None,
+                "description": "Invalid Symbol",
+                "sector": None,
+                "industry": None,
+                "error": "Invalid symbol provided",
+            }
+
+        # Clean up the symbol (remove any spaces or special characters)
+        clean_symbol = symbol.strip().upper()
+
+        # Get cookies for TradingView
+        tv_cookies = get_cookies_from_browser()
+
+        # Try to fetch data for the exact symbol first
+        query = (
+            Query()
+            .select(
+                "name",
+                "close",
+                "change",
+                "change_abs",
+                "volume",
+                "description",
+                "market_cap_basic",
+                "sector",
+                "industry",
+                "price_earnings_ttm",
+                "earnings_per_share_basic_ttm",
+                "price_book_fq",
+                "average_volume_30d_calc",
+            )
+            .where(col("name") == clean_symbol)  # Name is the ticker symbol in TradingView
+            .limit(1)
+            .get_scanner_data(cookies=tv_cookies)
+        )
+
+        count, df = query if query else (0, pd.DataFrame())
+        if df.empty:
+            return {
+                "symbol": None,
+                "price": None,
+                "change": None,
+                "volume": None,
+                "description": "Invalid Symbol",
+                "sector": None,
+                "industry": None,
+                "error": "Invalid symbol provided",
+            }
+
+        # Get the latest price from the DataFrame
+        latest_price = float(df.iloc[0]["close"])
+        change = float(df.iloc[0]["change"])
+        volume = float(df.iloc[0]["volume"])
+
+        return {
+            "symbol": clean_symbol,
+            "price": latest_price,
+            "change": change,
+            "volume": volume,
+            "description": df.iloc[0]["description"],
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching stock price: {str(e)}")
+        return {
+            "symbol": None,
+            "price": None,
+            "change": None,
+            "volume": None,
+            "description": "Invalid Symbol",
+            "sector": None,
+            "industry": None,
+            "error": "Invalid symbol provided",
+        }
+
+
+if __name__ == "__main__":
+    print(get_stock_price_tv("BTC"))

@@ -2,7 +2,8 @@ import logging
 import os
 from datetime import datetime
 
-from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestQuoteRequest
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import AssetStatus, OrderSide, TimeInForce
 from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest, StopOrderRequest
@@ -24,7 +25,9 @@ class AlpacaService:
             raise ValueError("Alpaca API key and secret must be set in environment variables")
 
         # Initialize Alpaca clients
-        self.trading_client = TradingClient(self.api_key, self.api_secret, paper=self.paper_trading)
+        self.trading_client = TradingClient(
+            self.api_key, self.api_secret, paper=self.paper_trading, url_override=os.environ.get("ALPACA_BASE_URL")
+        )
         self.data_client = StockHistoricalDataClient(self.api_key, self.api_secret)
         assets = self.trading_client.get_all_assets()
         self.active_assets = [asset for asset in assets if asset.status == AssetStatus.ACTIVE and asset.tradable]
@@ -212,7 +215,7 @@ class AlpacaService:
             end = datetime.strptime(end_date, "%Y-%m-%d")
 
             # Get calendar from Alpaca
-            calendar = self.trading_client.get_calendar(start=start_date, end=end_date)
+            calendar = self.trading_client.get_calendar(start=start, end=end)
 
             # Extract dates as strings
             trading_days = [day.date.strftime("%Y-%m-%d") for day in calendar]
@@ -287,21 +290,32 @@ class AlpacaService:
             logger.error(f"Error getting historical bars for {symbol} on {date}: {str(e)}")
             return []
 
-    def get_current_price(self, symbol):
+    async def get_current_price(self, symbol):
         """
-        Get the current price for a symbol
+        Get the current price of a stock from Alpaca API
 
         Args:
             symbol: Stock symbol
 
         Returns:
-            Current price as float
+            Current price as a float
         """
         try:
-            # Get latest trade from Alpaca
-            trade = self.trading_client.get_latest_trade(symbol)
-            return float(trade.price)
-
+            # Get the latest quote for the symbol
+            multisymbol_request_params = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
+            quote = self.trading_client.get_stock_latest_quote(multisymbol_request_params)
+            return quote[symbol].ask_price
         except Exception as e:
             logger.error(f"Error getting current price for {symbol}: {str(e)}")
-            return 0.0
+            raise
+
+
+if __name__ == "__main__":
+    pass
+    # api_key = os.environ.get("ALPACA_API_KEY")
+    # api_secret = os.environ.get("ALPACA_API_SECRET")
+    # # keys required
+    # stock_client = StockHistoricalDataClient(api_key, api_secret)
+    # multisymbol_request_params = StockLatestQuoteRequest(symbol_or_symbols=["SPY"])
+    # latest_multisymbol_quotes = stock_client.get_stock_latest_quote(multisymbol_request_params)
+    # print(latest_multisymbol_quotes)

@@ -5,6 +5,8 @@ from datetime import datetime
 from services.alpaca_service import AlpacaService
 from services.stock_screener_service import StockScreenerService
 
+from backend.services.tradingview_service import get_stock_price_tv
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +20,6 @@ class TradingStrategyService:
         self.market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
             tzinfo=datetime.timezone(-datetime.timedelta(hours=8))
         )
-
         self.market_close_time = datetime(now.year, now.month, now.day, hour=13, minute=0, second=0).replace(
             tzinfo=datetime.timezone(-datetime.timedelta(hours=8))
         )
@@ -268,7 +269,7 @@ class TradingStrategyService:
 
             # Get stocks that opened below previous day's high
             stocks = await self.screener.get_stocks_open_below_prev_high(screener_params)
-            processed_stocks = self.screener.process_screener_results(stocks, params.get("max_positions", 100))
+            processed_stocks = self.screener.process_screener_results(stocks, params.get("max_positions", 10))
 
             # Filter out stocks we already have positions in
             new_opportunities = [stock for stock in processed_stocks if stock["symbol"] not in current_symbols]
@@ -297,9 +298,7 @@ class TradingStrategyService:
                 target_price = prev_day_high * 1.005
 
                 # Calculate position size
-                position_size = self.calculate_position_size(
-                    account, params.get("position_size_percentage", 5), 2  # Default stop loss percentage
-                )
+                position_size = self.calculate_position_size(account, params.get("position_size_percentage", 10), 100)
 
                 # Calculate number of shares
                 shares = int(position_size / target_price)
@@ -342,7 +341,11 @@ class TradingStrategyService:
 
             # Monitor the stock price until it reaches the target
             while True:
-                current_price = self.alpaca.get_current_price(symbol)
+                # Get real-time price from TradingView WebSocket
+                try:
+                    current_price = self.alpaca.get_current_price(symbol)
+                except Exception:
+                    current_price = get_stock_price_tv(symbol)["price"]
 
                 if current_price >= target_price:
                     logger.info(f"{symbol} reached target price of ${target_price}")
@@ -355,8 +358,8 @@ class TradingStrategyService:
                     logger.info(f"Market closed before {symbol} reached target price")
                     return {"success": False, "message": "Market closed before target price reached"}
 
-                # Wait before checking again (5 seconds)
-                await asyncio.sleep(5)
+                # Wait for next price update through WebSocket
+                await asyncio.sleep(5)  # Reduced sleep time for faster updates
 
             # Place market buy order
             order = self.alpaca.place_market_order(symbol, shares, "buy")
