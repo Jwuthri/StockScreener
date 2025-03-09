@@ -6,7 +6,7 @@ from alpaca.data import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import AssetStatus, OrderSide, TimeInForce
-from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest, StopOrderRequest
+from alpaca.trading.requests import GetCalendarRequest, LimitOrderRequest, MarketOrderRequest, StopOrderRequest
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -215,7 +215,7 @@ class AlpacaService:
             end = datetime.strptime(end_date, "%Y-%m-%d")
 
             # Get calendar from Alpaca
-            calendar = self.trading_client.get_calendar(start=start, end=end)
+            calendar = self.trading_client.get_calendar(filters=GetCalendarRequest(start=start, end=end))
 
             # Extract dates as strings
             trading_days = [day.date.strftime("%Y-%m-%d") for day in calendar]
@@ -224,6 +224,59 @@ class AlpacaService:
 
         except Exception as e:
             logger.error(f"Error getting trading days: {str(e)}")
+            return []
+
+    def get_historical_bar(self, symbol, date, timeframe):
+        """Get historical bars for a symbol on a specific date"""
+        try:
+            from alpaca.data import StockHistoricalDataClient
+            from alpaca.data.requests import StockBarsRequest
+            from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+            # Format date if it's a string
+            if isinstance(date, str):
+                date = datetime.strptime(date, "%Y-%m-%d").date()
+
+            # Set start and end times for the day
+            start = datetime.combine(date, datetime.min.time())
+            end = datetime.combine(date, datetime.max.time())
+
+            # Create a market data client
+            data_client = StockHistoricalDataClient(self.api_key, self.api_secret)
+
+            # Map timeframe string to TimeFrame object
+            timeframe_map = {
+                "1Min": TimeFrame(1, TimeFrameUnit.Minute),
+                "5Min": TimeFrame(5, TimeFrameUnit.Minute),
+                "15Min": TimeFrame(15, TimeFrameUnit.Minute),
+                "1H": TimeFrame(1, TimeFrameUnit.Hour),
+                "1D": TimeFrame(1, TimeFrameUnit.Day),
+            }
+            tf = timeframe_map.get(timeframe, TimeFrame.Minute)
+            # Create request
+            request = StockBarsRequest(symbol_or_symbols=symbol.symbol, timeframe=tf, start=start, end=end)
+
+            # Get bars
+            bars_response = data_client.get_stock_bars(request)
+
+            # Convert to list of dictionaries
+            bars_list = []
+            if bars_response and symbol.symbol in bars_response.data:
+                for bar in bars_response.data[symbol.symbol]:
+                    bars_list.append(
+                        {
+                            "t": bar.timestamp,
+                            "o": bar.open,
+                            "h": bar.high,
+                            "l": bar.low,
+                            "c": bar.close,
+                            "v": bar.volume,
+                        }
+                    )
+
+            return bars_list
+        except Exception as e:
+            logger.error(f"Error getting historical bars for {symbol}: {str(e)}")
             return []
 
     def get_historical_bars(self, symbol, date, timeframe):

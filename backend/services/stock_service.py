@@ -305,7 +305,6 @@ def get_top_losers(limit=10):
                             "volume": volume,
                         }
                     )
-                    # breakpoint()
                     logger.debug(f"Added loser: {symbol}")
             except Exception as e:
                 logger.error(f"Error processing row: {e}")

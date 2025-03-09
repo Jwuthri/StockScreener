@@ -2,6 +2,9 @@ import logging
 from datetime import datetime, timedelta
 
 import aiohttp
+from alpaca.trading.enums import AssetStatus
+
+from backend.services.alpaca_service import AlpacaService
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +12,7 @@ logger = logging.getLogger(__name__)
 class StockScreenerService:
     def __init__(self):
         self.base_url = "http://localhost:8000"  # Your existing backend API
+        self.alpaca = AlpacaService()
 
     async def _fetch_screener_results(self, endpoint, params):
         """Generic method to fetch screener results from your existing API"""
@@ -167,17 +171,29 @@ class StockScreenerService:
             for symbol in universe:
                 try:
                     # Get daily data for current and previous day
-                    current_day_data = self.alpaca.get_historical_bars(symbol, date, "1Day")
-                    prev_day_data = self.alpaca.get_historical_bars(symbol, prev_date, "1Day")
+                    current_day_data = self.alpaca.get_historical_bar(symbol, date, "1Day")
+                    prev_day_data = self.alpaca.get_historical_bar(symbol, prev_date, "1Day")
+
+                    # Filter data to only include standard market hours (14:30 to 21:00 UTC)
+                    current_day_data = [
+                        c
+                        for c in current_day_data
+                        if c["t"].hour >= 14 and c["t"].hour < 21 and (c["t"].hour != 14 or c["t"].minute >= 30)
+                    ]
+                    prev_day_data = [
+                        c
+                        for c in prev_day_data
+                        if c["t"].hour >= 14 and c["t"].hour < 21 and (c["t"].hour != 14 or c["t"].minute >= 30)
+                    ]
 
                     if not current_day_data or not prev_day_data:
                         continue
 
                     # Extract relevant data
                     current_open = current_day_data[0]["o"]
-                    current_price = current_day_data[0]["c"]
-                    current_volume = current_day_data[0]["v"]
-                    prev_day_high = prev_day_data[0]["h"]
+                    current_price = current_day_data[5]["c"]
+                    current_volume = sum([p["v"] for p in current_day_data]) * 3
+                    prev_day_high = max([p["h"] for p in prev_day_data])
 
                     # Check if price is within range
                     if current_price < params.get("min_price", 1) or current_price > params.get("max_price", 20):
@@ -203,11 +219,11 @@ class StockScreenerService:
                     # Calculate change percentage from open
                     change_percent = ((current_price - current_open) / current_open) * 100
 
-                    # Check if change percentage is within range
-                    if change_percent < params.get("min_change_percent", 1) or change_percent > params.get(
-                        "max_change_percent", 100
-                    ):
-                        continue
+                    # # Check if change percentage is within range
+                    # if change_percent < params.get("min_change_percent", 1) or change_percent > params.get(
+                    #     "max_change_percent", 100
+                    # ):
+                    #     continue
 
                     # Add stock to filtered list
                     stock = {
@@ -248,14 +264,80 @@ class StockScreenerService:
             # In a real implementation, you might want to get the actual
             # components of an index like S&P 500 or Russell 2000
 
-            # Get assets from Alpaca
-            assets = self.alpaca.api.list_assets(status="active")
-            tradable_stocks = [
-                asset.symbol for asset in assets if asset.tradable and asset.exchange in ["NYSE", "NASDAQ"]
+            symbols = [
+                "ABLV",
+                "DWTX",
+                "KZIA",
+                "BTOG",
+                "ARBB",
+                "BTAI",
+                "ARBK",
+                "WHLR",
+                "AGH",
+                "NLST",
+                "BHIL",
+                "KOPN",
+                "WOLF",
+                "JVA",
+                "APLT",
+                "NINE",
+                "LTRY",
+                "CMTG",
+                "SACH",
+                "KLXE",
+                "HAIN",
+                "EJH",
+                "TOI",
+                "CARM",
+                "TUYA",
+                "VVPR",
+                "PLNH",
+                "STSS",
+                "ARRY",
+                "BITF",
+                "MRVI",
+                "BGS",
+                "MFI",
+                "XNET",
+                "XTKG",
+                "UMAC",
+                "BYON",
+                "COYA",
+                "ASLE",
+                "NVNI",
+                "PLL",
+                "CLSK",
+                "LAES",
+                "STBX",
+                "BMBL",
+                "FFIE",
+                "RGTI",
+                "QVCGA",
+                "DH",
+                "FUBO",
+                "ASPI",
+                "PLUG",
+                "TSSI",
+                "ESPR",
+                "DOMO",
+                "WULF",
+                "SMST",
+                "FSM",
+                "GT",
+                "AISP",
+                # "THM", "INTZ", "TLSA", "BGLC", "NUVB", "BW", "POET", "NPWR", "NG", "QMMM",
+                # "MPW", "ALLO", "RIG", "RXRX", "FCEL", "BTBT", "BYND", "AMLX", "IRBT", "ACDC",
+                # "DNUT", "VCIG", "PLTK", "NVAX", "SLXN", "ERAS", "CADL", "HRZN", "OSUR", "LWLG",
+                # "VUZI", "SENS", "KULR", "RC", "LUMN", "HIVE", "NIO", "FLNC", "SCLX", "CRVS",
+                # "TALO", "BORR", "HLX", "ATYR", "PTEN", "TSNDF", "SSL", "LXRX", "GV", "CWAFF",
+                # "CTMX", "GENK", "SUNE", "PSTV"
             ]
-
+            # Get assets from Alpaca
+            assets = self.alpaca.trading_client.get_all_assets()
+            active_assets = [asset for asset in assets if asset.status == AssetStatus.ACTIVE and asset.tradable]
+            active_assets = [asset for asset in active_assets if asset.symbol in symbols]
             # Limit to 500 stocks for performance
-            return tradable_stocks[:500]
+            return active_assets
 
         except Exception as e:
             logger.error(f"Error getting stock universe: {str(e)}")

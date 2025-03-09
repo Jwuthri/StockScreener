@@ -1,10 +1,9 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from services.alpaca_service import AlpacaService
-from services.stock_screener_service import StockScreenerService
-
+from backend.services.alpaca_service import AlpacaService
+from backend.services.stock_screener_service import StockScreenerService
 from backend.services.tradingview_service import get_stock_price_tv
 
 logger = logging.getLogger(__name__)
@@ -18,10 +17,10 @@ class TradingStrategyService:
         now = datetime.now()
         # Market hours: 6:30 AM - 1:00 PM PST
         self.market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
-            tzinfo=datetime.timezone(-datetime.timedelta(hours=8))
+            tzinfo=timezone(timedelta(hours=-8))
         )
         self.market_close_time = datetime(now.year, now.month, now.day, hour=13, minute=0, second=0).replace(
-            tzinfo=datetime.timezone(-datetime.timedelta(hours=8))
+            tzinfo=timezone(timedelta(hours=-8))
         )
 
     def calculate_position_size(self, account_info, risk_percentage, stop_loss_percentage):
@@ -256,11 +255,11 @@ class TradingStrategyService:
             # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
             now = datetime.now()
             market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
-                tzinfo=datetime.timezone(-datetime.timedelta(hours=8))
+                tzinfo=timezone(timedelta(hours=-8))
             )  # PST timezone
 
-            five_min_after_open = market_open_time + datetime.timedelta(minutes=5)
-            current_time = datetime.now(datetime.timezone.utc)
+            five_min_after_open = market_open_time + timedelta(minutes=5)
+            current_time = datetime.now(timezone(timedelta(hours=-8)))
 
             if current_time < five_min_after_open:
                 wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
@@ -295,7 +294,7 @@ class TradingStrategyService:
                 prev_day_high = float(stock["prev_day_high"])
 
                 # Calculate target price (previous day's high + 0.5%)
-                target_price = prev_day_high * 1.005
+                target_price = prev_day_high * 1.0005
 
                 # Calculate position size
                 position_size = self.calculate_position_size(account, params.get("position_size_percentage", 10), 100)
@@ -341,7 +340,6 @@ class TradingStrategyService:
 
             # Monitor the stock price until it reaches the target
             while True:
-                # Get real-time price from TradingView WebSocket
                 try:
                     current_price = self.alpaca.get_current_price(symbol)
                 except Exception:
@@ -353,7 +351,7 @@ class TradingStrategyService:
 
                 # Check if we're still in market hours (6:30 AM - 1:00 PM PST)
                 now = datetime.now()
-                current_time = now.replace(tzinfo=datetime.timezone(-datetime.timedelta(hours=8)))  # Convert to PST
+                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))  # Convert to PST
                 if current_time < self.market_open_time or current_time > self.market_close_time:
                     logger.info(f"Market closed before {symbol} reached target price")
                     return {"success": False, "message": "Market closed before target price reached"}
@@ -423,9 +421,8 @@ class TradingStrategyService:
                 "average_profit_per_trade": 0,
                 "max_drawdown": 0,
             }
-
             # Simulate initial account balance
-            account_balance = params.get("initial_balance", 100000)
+            account_balance = params.get("initial_balance", 1000)
             max_balance = account_balance
 
             # Process each trading day
@@ -447,10 +444,14 @@ class TradingStrategyService:
                     prev_day_high = float(stock["prev_day_high"])
 
                     # Calculate target price (previous day's high + 0.5%)
-                    target_price = prev_day_high * 1.005
+                    target_price = prev_day_high
 
                     # Get 1-minute bars for this stock on this day
-                    bars = self.alpaca.get_historical_bars(symbol, day, "1Min")
+                    try:
+                        bars = self.alpaca.get_historical_bar(symbol, day, "1Min")
+                    except Exception as e:
+                        logger.error(f"Could not get bars for {symbol} on {day}: {str(e)}")
+                        continue
 
                     # Skip if no bars found
                     if not bars:
@@ -463,7 +464,7 @@ class TradingStrategyService:
 
                     # Skip first 5 minutes of trading day (market open + 5 min)
                     for i, bar in enumerate(bars[5:], 5):
-                        if bar["c"] >= target_price:
+                        if bar["c"] > target_price:
                             reached_target = True
                             entry_time = bar["t"]
                             entry_price = bar["c"]
@@ -474,7 +475,7 @@ class TradingStrategyService:
                         continue
 
                     # Calculate position size
-                    risk_amount = account_balance * (params.get("position_size_percentage", 5) / 100)
+                    risk_amount = account_balance * (params.get("position_size_percentage", 10) / 100)
                     shares = int(risk_amount / entry_price)
 
                     if shares < 1:
@@ -497,7 +498,7 @@ class TradingStrategyService:
                     # Record trade
                     trade = {
                         "date": day,
-                        "symbol": symbol,
+                        "symbol": symbol.symbol,
                         "entry_time": entry_time,
                         "entry_price": entry_price,
                         "exit_time": exit_time,
@@ -505,6 +506,7 @@ class TradingStrategyService:
                         "shares": shares,
                         "profit_loss": profit_loss,
                         "profit_loss_percent": profit_loss_percent,
+                        "prev_day_high": prev_day_high,
                     }
 
                     backtest_results["trades"].append(trade)
@@ -535,7 +537,7 @@ class TradingStrategyService:
 
             backtest_results["final_balance"] = account_balance
             backtest_results["total_return_percent"] = (
-                (account_balance / params.get("initial_balance", 100000)) - 1
+                (account_balance / params.get("initial_balance", 1000)) - 1
             ) * 100
 
             return {
@@ -547,3 +549,18 @@ class TradingStrategyService:
         except Exception as e:
             logger.error(f"Error during backtest: {str(e)}")
             return {"success": False, "message": f"Error during backtest: {str(e)}"}
+
+
+if __name__ == "__main__":
+    x = TradingStrategyService()
+    res = asyncio.run(
+        x.backtest_open_below_prev_high_strategy(
+            params={
+                "min_price": 1,
+                "max_price": 20,
+            },
+            start_date="2025-03-07",
+            end_date="2025-03-07",
+        )
+    )
+    logger.info(res)
