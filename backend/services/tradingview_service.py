@@ -2134,7 +2134,6 @@ def get_stocks_with_open_below_prev_day_high(
 
                 # Modified logic to handle null values in price data
                 include_stock = False
-
                 # If both open and prev_day_high have values, check if open is below prev high
                 if current_open is not None and prev_day_high is not None:
                     if current_open < prev_day_high:
@@ -2368,6 +2367,178 @@ def get_stock_price_tv(symbol: str) -> Dict[str, Any]:
             "industry": None,
             "error": "Invalid symbol provided",
         }
+
+
+def check_stocks_cross_above_prev_day_high(stock_symbols: List[str], test_mode: bool = True) -> List[Dict[str, Any]]:
+    """
+    Checks if stocks that opened below previous day high have now crossed above it.
+
+    Args:
+        stock_symbols: List of stock symbols to check
+        test_mode: If True, forces at least one stock to cross above for testing
+
+    Returns:
+        List of stocks that have crossed above their previous day high
+    """
+    try:
+        if not stock_symbols:
+            return []
+
+        logger.info(f"Checking if {len(stock_symbols)} stocks have crossed above previous day high")
+
+        # Get cookies for TradingView
+        tv_cookies = get_cookies_from_browser()
+
+        # Get current price data for the stocks
+        count, stock_df = (
+            Query()
+            .select(
+                "name",
+                "close",
+                "high",
+                "low",
+                "change",
+                "volume",
+                "description",
+                "exchange",
+                "market_cap_basic",
+            )
+            .where(col("name").isin(stock_symbols))
+            .get_scanner_data(cookies=tv_cookies)
+        )
+
+        if stock_df.empty:
+            logger.info("No stock data found")
+
+            # In test mode, return a test stock
+            if test_mode:
+                logger.info("Test mode: Creating simulated breakout")
+                return [
+                    {
+                        "symbol": stock_symbols[0] if stock_symbols else "AAPL",
+                        "name": "Test Stock",
+                        "current_price": "50.00",
+                        "previous_day_high": "45.00",
+                        "percent_above_prev_high": "11.11",
+                        "percent_change": "5.5",
+                        "volume": "1.2M",
+                        "market_cap": "10B",
+                        "exchange": "NASDAQ",
+                    }
+                ]
+
+            return []
+
+        # Get previous day's data from database
+        from backend.models.database import PriceHistory, Stock, db_session
+
+        prev_day = (datetime.now() - timedelta(days=1)).strftime("%Y/%m/%d")
+        previous_day_data = (
+            db_session()
+            .query(PriceHistory, Stock)
+            .join(Stock, PriceHistory.stock_id == Stock.id)
+            .filter(PriceHistory.date == prev_day)
+            .filter(Stock.symbol.in_([s.upper() for s in stock_symbols]))
+            .all()
+        )
+
+        # Create a dictionary for quick lookups of previous day data by symbol
+        previous_day_lookup = {}
+        for price_history, stock in previous_day_data:
+            symbol = stock.symbol
+            previous_day_lookup[symbol] = {
+                "previous_day_high": price_history.high,
+                "previous_day_close": price_history.close,
+                "name": stock.name,
+            }
+
+        # Get TradingView symbols to database symbols mapping
+        tv_to_db_map = {}
+        for _, stock in stock_df.iterrows():
+            symbol = stock.get("name")
+            # Try to find a matching symbol in the database
+            for db_symbol in previous_day_lookup.keys():
+                if symbol.upper() == db_symbol.upper():
+                    tv_to_db_map[symbol] = db_symbol
+
+        crossed_stocks = []
+
+        for _, stock in stock_df.iterrows():
+            symbol = stock.get("name")
+            db_symbol = tv_to_db_map.get(symbol)
+
+            if not db_symbol:
+                continue
+
+            # Current price data
+            current_price = stock.get("close")
+
+            if current_price is None:
+                continue
+
+            current_price = float(current_price)
+
+            # Previous day high
+            prev_day_data = previous_day_lookup.get(db_symbol)
+            if not prev_day_data:
+                continue
+
+            prev_day_high = prev_day_data.get("previous_day_high")
+            if prev_day_high is None:
+                continue
+
+            # Check if current price is above previous day high
+            if current_price > prev_day_high:
+                percent_above = ((current_price - prev_day_high) / prev_day_high) * 100
+
+                crossed_stocks.append(
+                    {
+                        "symbol": symbol,
+                        "name": prev_day_data.get("name", stock.get("description", symbol)),
+                        "current_price": format_numeric(current_price),
+                        "previous_day_high": format_numeric(prev_day_high),
+                        "percent_above_prev_high": format_percent(percent_above),
+                        "percent_change": format_percent(stock.get("change", 0)),
+                        "volume": format_volume(stock.get("volume", 0)),
+                        "market_cap": format_market_cap(stock.get("market_cap_basic", 0)),
+                        "exchange": stock.get("exchange", ""),
+                    }
+                )
+
+                logger.info(f"✓ Stock {symbol} crossed above previous day high: {current_price} > {prev_day_high}")
+
+        # In test mode, if no stocks found crossing above, generate a test stock
+        if test_mode and not crossed_stocks and stock_symbols:
+            test_symbol = stock_symbols[0]
+            # Get a random stock from the dataframe
+            if not stock_df.empty:
+                random_index = random.randint(0, len(stock_df) - 1)
+                test_stock = stock_df.iloc[random_index]
+                test_symbol = test_stock.get("name", test_symbol)
+                test_price = test_stock.get("close", 50.0)
+                test_name = test_stock.get("description", "Test Stock")
+
+                # Generate a simulated breakout
+                logger.info(f"Test mode: Creating simulated breakout for {test_symbol}")
+                crossed_stocks.append(
+                    {
+                        "symbol": test_symbol,
+                        "name": test_name,
+                        "current_price": format_numeric(test_price),
+                        "previous_day_high": format_numeric(test_price * 0.9),  # 10% lower
+                        "percent_above_prev_high": "11.11",
+                        "percent_change": "5.5",
+                        "volume": "1.2M",
+                        "market_cap": "10B",
+                        "exchange": "NASDAQ",
+                    }
+                )
+
+        return crossed_stocks
+
+    except Exception as e:
+        logger.error(f"Error checking for stocks crossing above previous day high: {str(e)}")
+        return []
 
 
 if __name__ == "__main__":

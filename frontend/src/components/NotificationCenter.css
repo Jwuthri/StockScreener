@@ -1,0 +1,101 @@
+/* Custom styles for notifications */
+.notification-container {
+  z-index: 9999;
+}
+
+/* Increase the width of the notifications */
+.notification {
+  width: 360px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px !important;
+  padding: 12px !important;
+}
+
+.notification.notification-success {
+  background-color: #22c55e !important; /* Bright green */
+}
+
+.notification.notification-warning {
+  background-color: #f59e0b !important; /* Amber */
+}
+
+.notification-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  margin-bottom: 6px !important;
+  color: white !important;
+}
+
+.notification-message {
+  font-size: 14px !important;
+  color: white !important;
+}
+
+/* Custom styles for stock notifications */
+.stock-notification {
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.stock-notification .notification-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.stock-notification .notification-description {
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stock-notification .notification-price {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 6px 0;
+  color: white;
+}
+
+.stock-notification .notification-details {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stock-notification .label {
+  opacity: 0.85;
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+/* Closing button */
+.notification-container .notification-close {
+  opacity: 0.8;
+  color: white;
+  font-size: 16px;
+}
+
+.notification-container .notification-close:hover {
+  opacity: 1;
+}
+
+/* Animation adjustments */
+.notification-container .notification.notification-enter {
+  transform: translateX(100%);
+}
+
+.notification-container .notification.notification-enter-active {
+  transform: translateX(0);
+  transition: transform 400ms ease-in-out;
+}
+
+.notification-container .notification.notification-leave {
+  transform: translateX(0);
+}
+
+.notification-container .notification.notification-leave-active {
+  transform: translateX(100%);
+  transition: transform 400ms ease-in-out;
+}

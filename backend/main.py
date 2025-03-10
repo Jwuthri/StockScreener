@@ -12,6 +12,7 @@ if os.path.basename(os.getcwd()) == "backend":
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime
 
 import numpy as np
@@ -22,7 +23,11 @@ from backend.api.alert_routes import router as alert_router
 from backend.api.auth_routes import router as auth_router
 from backend.models.database import db_session, initialize_db
 from backend.services.alert_service import alert_manager
-from backend.services.tradingview_service import get_stocks_crossing_prev_day_high
+from backend.services.tradingview_service import (
+    check_stocks_cross_above_prev_day_high,
+    get_stocks_crossing_prev_day_high,
+    get_stocks_with_open_below_prev_day_high,
+)
 
 # Configure logging
 # Set up logging configuration
@@ -104,13 +109,20 @@ class CustomORJSONResponse(ORJSONResponse):
 app = FastAPI(
     title="Stock Screener API",
     description="API for stock screening and real-time alerts",
+    version="1.0.0",
     default_response_class=CustomORJSONResponse,
 )
 
 # Configure CORS
+origins = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "*",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Add your frontend URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,6 +134,9 @@ active_connections = []
 # Store the last set of stocks crossing above previous day high
 previous_crossing_stocks = set()
 
+# Global variable to store stocks with open below prev day high
+open_below_prev_high_stocks = []
+
 # Include routers
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(stock_router, prefix="/api/stocks", tags=["stocks"])
@@ -131,15 +146,17 @@ app.include_router(alert_router, prefix="/api/alerts", tags=["alerts"])
 @app.on_event("startup")
 async def startup_event():
     """Initialize the database and start background tasks."""
-    logger.info("Starting application")
-    # Initialize database
-    initialize_db()
+    try:
+        logger.info("Starting up Stock Screener API")
+        initialize_db()
 
-    # Start alert monitoring
-    asyncio.create_task(alert_manager.start_monitoring())
+        # Start periodic tasks
+        asyncio.create_task(periodic_stock_screener())
+        asyncio.create_task(monitor_open_below_prev_high_stocks())
 
-    # Start periodic background tasks
-    asyncio.create_task(periodic_stock_screener())
+        logger.info("Background tasks scheduled")
+    except Exception as e:
+        logger.error(f"Error during startup: {str(e)}")
 
 
 @app.on_event("shutdown")
@@ -273,6 +290,100 @@ async def periodic_stock_screener():
 
         # Run every 5 minutes
         await asyncio.sleep(300)
+
+
+async def monitor_open_below_prev_high_stocks():
+    """
+    Background task to:
+    1. Fetch stocks with open below previous day high
+    2. Monitor these stocks every 5 seconds
+    3. Send notifications when they cross above the previous day high
+    """
+    global open_below_prev_high_stocks
+
+    # First-time fetch delay
+    await asyncio.sleep(5)
+
+    # For testing purposes - hard-coded stock list if nothing is returned from the screener
+    test_stocks = [
+        "AAPL",
+        "MSFT",
+        "AMZN",
+        "GOOGL",
+        "META",
+        "TSLA",
+        "NFLX",
+        "AMD",
+        "NVDA",
+        "KLXE",
+        "DOMO",
+        "AVGX",
+        "AGH",
+        "MSC",
+    ]
+
+    while True:
+        try:
+            # Fetch stocks with open below previous day high if list is empty or every 5 minutes
+            if not open_below_prev_high_stocks or time.time() % 300 < 5:
+                logger.info("Fetching stocks with open below previous day high")
+                stocks = get_stocks_with_open_below_prev_day_high(
+                    limit=500,
+                    min_price=0.25,
+                    max_price=100.0,
+                    min_volume=100_000,
+                    min_diff_percent=1,
+                    min_change_percent=1,
+                )
+
+                open_below_prev_high_stocks = [stock["symbol"] for stock in stocks]
+                # If no stocks found, use test stocks for demonstration purposes
+                if not open_below_prev_high_stocks:
+                    logger.warning("No stocks found with open below prev day high. Using test stocks.")
+                    open_below_prev_high_stocks = test_stocks
+
+                logger.info(f"Found {len(open_below_prev_high_stocks)} stocks with open below previous day high")
+
+            # Check if any stocks crossed above previous day high
+            if open_below_prev_high_stocks:
+                logger.info(f"Checking {len(open_below_prev_high_stocks)} stocks for crossing above previous day high")
+                crossed_stocks = check_stocks_cross_above_prev_day_high(open_below_prev_high_stocks, test_mode=False)
+
+                if crossed_stocks:
+                    logger.info(f"Found {len(crossed_stocks)} stocks that crossed above previous day high")
+
+                    # Remove these stocks from the watch list
+                    for stock in crossed_stocks:
+                        if stock["symbol"] in open_below_prev_high_stocks:
+                            open_below_prev_high_stocks.remove(stock["symbol"])
+
+                    # Convert data to safe JSON
+                    safe_crossed_stocks = safe_json_serialize(crossed_stocks)
+
+                    # Send alerts to all connected clients
+                    alert_data = {
+                        "type": "crossed_above_prev_day_high",
+                        "data": safe_crossed_stocks,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+
+                    logger.info(f"Sending alert data to {len(active_connections)} WebSocket connections")
+
+                    # Send to all connected WebSockets
+                    for connection in active_connections:
+                        try:
+                            await connection.send_text(json.dumps(alert_data, cls=CustomJSONEncoder))
+                            logger.info("Alert sent successfully via WebSocket")
+                        except Exception as e:
+                            logger.error(f"Error sending to WebSocket: {e}")
+                else:
+                    logger.info("No stocks found crossing above previous day high in this check")
+
+        except Exception as e:
+            logger.error(f"Error in monitoring open below prev high stocks: {e}")
+
+        # Check every 5 seconds
+        await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
