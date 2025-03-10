@@ -51,7 +51,7 @@ async def get_stock_info(symbol: str):
             "industry": stock.industry,
             "last_updated": stock.last_updated,
         }
-    except Stock.DoesNotExist:
+    except Exception:
         # Fetch from external API
         stock_data = fetch_stock_info(symbol.upper())
         if not stock_data:
@@ -81,7 +81,7 @@ async def get_stock_history(symbol: str, period: str = "1mo"):
     try:
         # Get stock from database
         stock = Stock.get(Stock.symbol == symbol.upper())
-    except Stock.DoesNotExist:
+    except Exception:
         # Fetch stock info first
         stock_data = fetch_stock_info(symbol.upper())
         if not stock_data:

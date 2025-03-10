@@ -1599,9 +1599,9 @@ const StockScreener = () => {
                 <Slider
                   value={maxResults}
                   onChange={handleMaxResultsChange}
-                  min={5}
-                  max={100}
-                  step={null}
+                  min={10}
+                  max={500}
+                  step={10}
                   marks={maxResultsMarks}
                   valueLabelDisplay="auto"
                   sx={{

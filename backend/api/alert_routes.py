@@ -73,7 +73,7 @@ async def update_alert_status(
     """Update an alert's active status."""
     try:
         alert = Alert.get((Alert.id == alert_id) & (Alert.user == current_user))
-    except Alert.DoesNotExist:
+    except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     result = update_alert(alert_id, is_active=is_active)
@@ -87,7 +87,7 @@ async def remove_alert(alert_id: int, current_user: User = Depends(get_current_u
     """Delete an alert."""
     try:
         alert = Alert.get((Alert.id == alert_id) & (Alert.user == current_user))
-    except Alert.DoesNotExist:
+    except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     if delete_alert(alert_id):

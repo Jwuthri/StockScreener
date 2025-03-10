@@ -284,6 +284,11 @@ class TradingStrategyService:
                     "positions_taken": 0,
                 }
 
+            # Initialize tracking dictionary for active strategies
+            for stock in new_opportunities[:max_new_positions]:
+                symbol = stock["symbol"]
+                self.active_strategies[symbol] = False
+
             # Take positions in new opportunities
             positions_taken = 0
             monitoring_tasks = []
@@ -327,65 +332,152 @@ class TradingStrategyService:
 
     async def _monitor_and_trade_stock(self, symbol, target_price, shares, position_size):
         """
-        Monitor a stock until it reaches the target price, then buy and hold for 5 minutes
+        Monitor a stock and buy when price crosses above the previous day's high
+        (previous check below, current check above), then sell 5 minutes after each entry.
 
         Args:
             symbol: Stock symbol
-            target_price: Price at which to buy (prev day high + 0.5%)
+            target_price: Price threshold (prev day high)
             shares: Number of shares to buy
             position_size: Dollar amount to invest
         """
         try:
-            logger.info(f"Monitoring {symbol} for target price of ${target_price}")
+            logger.info(f"Monitoring {symbol} for crosses above ${target_price}")
 
-            # Monitor the stock price until it reaches the target
+            # Track when we're in a position to avoid multiple entries at once
+            in_position = False
+            # Track last price to detect crosses
+            last_price = None
+            # Track active trades
+            active_trades = []
+            # Track trades made today
+            trades_today = 0
+            max_trades_per_day = 5  # Limit trades per day per stock
+
+            # Monitor the stock price until market close
             while True:
+                # Check if we're still in market hours
+                now = datetime.now()
+                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))  # Convert to PST
+                if current_time > self.market_close_time:
+                    logger.info(f"Market closed, ending monitoring for {symbol}")
+                    break
+
+                # Check if we've reached max trades for today
+                if trades_today >= max_trades_per_day:
+                    logger.info(f"Reached maximum trades for {symbol} today")
+                    break
+
                 try:
                     current_price = self.alpaca.get_current_price(symbol)
                 except Exception:
                     current_price = get_stock_price_tv(symbol)["price"]
 
-                if current_price >= target_price:
-                    logger.info(f"{symbol} reached target price of ${target_price}")
-                    break
+                # Detect crossing above target price (previous check below, current check above)
+                if (
+                    last_price is not None
+                    and last_price < target_price
+                    and current_price >= target_price
+                    and not in_position
+                ):
+                    # Price has crossed above target
+                    logger.info(f"{symbol} crossed above target price of ${target_price}")
 
-                # Check if we're still in market hours (6:30 AM - 1:00 PM PST)
-                now = datetime.now()
-                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))  # Convert to PST
-                if current_time < self.market_open_time or current_time > self.market_close_time:
-                    logger.info(f"Market closed before {symbol} reached target price")
-                    return {"success": False, "message": "Market closed before target price reached"}
+                    # Place market buy order
+                    order = self.alpaca.place_market_order(symbol, shares, "buy")
+                    logger.info(f"Bought {shares} shares of {symbol} at ${current_price}")
 
-                # Wait for next price update through WebSocket
-                await asyncio.sleep(5)  # Reduced sleep time for faster updates
+                    # Mark that we're in a position
+                    in_position = True
+                    trades_today += 1
 
-            # Place market buy order
-            order = self.alpaca.place_market_order(symbol, shares, "buy")
-            logger.info(f"Bought {shares} shares of {symbol} at ${current_price}")
+                    # Create a task to sell after 5 minutes
+                    sell_task = asyncio.create_task(
+                        self._sell_after_delay(symbol, shares, current_price, 300)  # 5 minutes in seconds
+                    )
 
-            # Wait exactly 5 minutes
-            logger.info(f"Holding {symbol} for 5 minutes")
-            await asyncio.sleep(300)  # 5 minutes in seconds
+                    # Add callback to update position status when sell completes
+                    sell_task.add_done_callback(lambda _: self._position_closed_callback(symbol))
 
-            # Sell the position
-            sell_order = self.alpaca.place_market_order(symbol, shares, "sell")
-            logger.info(f"Sold {shares} shares of {symbol} after 5-minute hold")
+                    active_trades.append(sell_task)
+
+                # Update last price
+                last_price = current_price
+
+                # Wait for next price update
+                await asyncio.sleep(5)  # Check price every 5 seconds
+
+            # Wait for any remaining active trades to complete
+            if active_trades:
+                await asyncio.gather(*active_trades)
 
             return {
                 "success": True,
-                "message": f"Successfully traded {symbol}: bought at ${current_price}, held for 5 minutes",
+                "message": f"Successfully monitored {symbol} for the trading day",
             }
 
         except Exception as e:
             logger.error(f"Error monitoring and trading {symbol}: {str(e)}")
             return {"success": False, "message": str(e)}
 
-    async def backtest_open_below_prev_high_strategy(self, params, start_date, end_date):
+    def _position_closed_callback(self, symbol):
+        """Callback function when a position is closed"""
+        logger.info(f"Position in {symbol} closed")
+        # Reset the in_position flag to allow new entries
+        self.active_strategies[symbol] = False
+
+    async def _sell_after_delay(self, symbol, shares, entry_price, delay_seconds):
         """
-        Backtest the open below previous day's high strategy using historical data
+        Sell a position after a specified delay
 
         Args:
-            params: Strategy parameters (same as execute_open_below_prev_high_strategy)
+            symbol: Stock symbol
+            shares: Number of shares to sell
+            entry_price: Price at which the stock was bought
+            delay_seconds: Delay before selling in seconds
+        """
+        try:
+            logger.info(f"Holding {symbol} for {delay_seconds/60} minutes")
+            await asyncio.sleep(delay_seconds)
+
+            # Sell the position
+            sell_order = self.alpaca.place_market_order(symbol, shares, "sell")
+
+            # Get current price for logging
+            try:
+                current_price = self.alpaca.get_current_price(symbol)
+            except Exception:
+                current_price = get_stock_price_tv(symbol)["price"]
+
+            profit_loss = (current_price - entry_price) * shares
+            profit_loss_percent = ((current_price / entry_price) - 1) * 100
+
+            logger.info(
+                f"Sold {shares} shares of {symbol} after {delay_seconds/60}-minute hold. "
+                f"P/L: ${profit_loss:.2f} ({profit_loss_percent:.2f}%)"
+            )
+
+            return {
+                "success": True,
+                "symbol": symbol,
+                "shares": shares,
+                "entry_price": entry_price,
+                "exit_price": current_price,
+                "profit_loss": profit_loss,
+                "profit_loss_percent": profit_loss_percent,
+            }
+
+        except Exception as e:
+            logger.error(f"Error selling {symbol} after delay: {str(e)}")
+            return {"success": False, "message": str(e)}
+
+    async def backtest_open_below_prev_high_strategy(self, params, start_date, end_date):
+        """
+        Backtest the strategy that buys when price crosses above previous day's high
+        (previous bar below, current bar above) and sells 5 minutes later.
+
+        Args:
+            params: Strategy parameters
             start_date: Start date for backtesting (YYYY-MM-DD)
             end_date: End date for backtesting (YYYY-MM-DD)
 
@@ -421,9 +513,14 @@ class TradingStrategyService:
                 "average_profit_per_trade": 0,
                 "max_drawdown": 0,
             }
+
             # Simulate initial account balance
             account_balance = params.get("initial_balance", 1000)
             max_balance = account_balance
+            min_balance = account_balance
+
+            # Set maximum trades per day per stock
+            max_trades_per_day = params.get("max_trades_per_day", 5)
 
             # Process each trading day
             for day in trading_days:
@@ -443,7 +540,7 @@ class TradingStrategyService:
                     open_price = float(stock["open"])
                     prev_day_high = float(stock["prev_day_high"])
 
-                    # Calculate target price (previous day's high + 0.5%)
+                    # Calculate target price (previous day's high)
                     target_price = prev_day_high
 
                     # Get 1-minute bars for this stock on this day
@@ -457,71 +554,96 @@ class TradingStrategyService:
                     if not bars:
                         continue
 
-                    # Find if and when price reached target
-                    reached_target = False
-                    entry_time = None
-                    entry_price = 0
+                    # Filter bars to only include market hours
+                    bars = [
+                        b
+                        for b in bars
+                        if b["t"].hour >= 14 and b["t"].hour < 21 and (b["t"].hour != 14 or b["t"].minute >= 30)
+                    ]
 
-                    # Skip first 5 minutes of trading day (market open + 5 min)
-                    for i, bar in enumerate(bars[5:], 5):
-                        if bar["c"] > target_price:
-                            reached_target = True
-                            entry_time = bar["t"]
-                            entry_price = bar["c"]
-                            break
-
-                    if not reached_target:
-                        logger.info(f"{symbol} did not reach target price on {day}")
+                    if len(bars) < 6:  # Need at least 6 bars (5 for initial wait + 1 for trading)
                         continue
 
-                    # Calculate position size
-                    risk_amount = account_balance * (params.get("position_size_percentage", 10) / 100)
-                    shares = int(risk_amount / entry_price)
+                    # Skip first 5 minutes of trading day
+                    start_index = 5
 
-                    if shares < 1:
-                        logger.info(f"Not enough balance to purchase {symbol}")
-                        continue
+                    # Track trades for this stock today
+                    trades_today = 0
 
-                    # Find exit price (5 minutes after entry)
-                    exit_index = min(i + 5, len(bars) - 1)  # 5 minutes later or end of day
-                    exit_price = bars[exit_index]["c"]
-                    exit_time = bars[exit_index]["t"]
+                    # Simulate trading throughout the day
+                    for i in range(start_index, len(bars) - 1):  # -1 to ensure we have a next bar
+                        # Check if we've reached max trades for this stock today
+                        # if trades_today >= max_trades_per_day:
+                        #     break
 
-                    # Calculate profit/loss
-                    profit_loss = (exit_price - entry_price) * shares
-                    profit_loss_percent = (exit_price / entry_price - 1) * 100
+                        prev_bar = bars[i - 1]
+                        current_bar = bars[i]
 
-                    # Update account balance
-                    account_balance += profit_loss
-                    max_balance = max(max_balance, account_balance)
+                        prev_price = prev_bar["c"]
+                        current_price = current_bar["c"]
 
-                    # Record trade
-                    trade = {
-                        "date": day,
-                        "symbol": symbol.symbol,
-                        "entry_time": entry_time,
-                        "entry_price": entry_price,
-                        "exit_time": exit_time,
-                        "exit_price": exit_price,
-                        "shares": shares,
-                        "profit_loss": profit_loss,
-                        "profit_loss_percent": profit_loss_percent,
-                        "prev_day_high": prev_day_high,
-                    }
+                        # Check for crossing above target price (prev bar below, current bar above)
+                        if prev_price < target_price and current_price >= target_price:
+                            # Price has crossed above target - BUY
+                            entry_time = current_bar["t"]
+                            entry_price = current_price
 
-                    backtest_results["trades"].append(trade)
-                    backtest_results["total_trades"] += 1
+                            # Calculate position size
+                            risk_amount = account_balance * (params.get("position_size_percentage", 10) / 100)
+                            shares = int(risk_amount / entry_price)
 
-                    if profit_loss > 0:
-                        backtest_results["winning_trades"] += 1
-                    else:
-                        backtest_results["losing_trades"] += 1
+                            if shares < 1:
+                                logger.info(f"Not enough balance to purchase {symbol}")
+                                continue
 
-                    backtest_results["total_profit_loss"] += profit_loss
+                            # Find exit price (5 minutes after entry)
+                            exit_index = min(i + 10, len(bars) - 1)  # 5 minutes later or end of day
+                            exit_price = bars[exit_index]["c"]
+                            exit_time = bars[exit_index]["t"]
 
-                    logger.info(
-                        f"Backtested trade: {symbol} on {day}, P/L: ${profit_loss:.2f} ({profit_loss_percent:.2f}%)"
-                    )
+                            # Calculate profit/loss
+                            profit_loss = (exit_price - entry_price) * shares
+                            profit_loss_percent = (exit_price / entry_price - 1) * 100
+
+                            # Update account balance
+                            account_balance += profit_loss
+                            max_balance = max(max_balance, account_balance)
+                            min_balance = min(min_balance, account_balance)
+
+                            # Record trade
+                            trade = {
+                                "date": day,
+                                "symbol": symbol.symbol,
+                                "entry_time": entry_time.isoformat(),
+                                "entry_price": entry_price,
+                                "exit_time": exit_time.isoformat(),
+                                "exit_price": exit_price,
+                                "shares": shares,
+                                "profit_loss": profit_loss,
+                                "profit_loss_percent": profit_loss_percent,
+                                "prev_day_high": prev_day_high,
+                            }
+
+                            backtest_results["trades"].append(trade)
+                            backtest_results["total_trades"] += 1
+
+                            if profit_loss > 0:
+                                backtest_results["winning_trades"] += 1
+                            else:
+                                backtest_results["losing_trades"] += 1
+
+                            backtest_results["total_profit_loss"] += profit_loss
+
+                            logger.info(
+                                f"Backtested trade: {symbol} on {day}, Entry: {entry_time}, "
+                                f"Exit: {exit_time}, P/L: ${profit_loss:.2f} ({profit_loss_percent:.2f}%)"
+                            )
+
+                            # Increment trades counter
+                            trades_today += 1
+
+                            # Skip ahead to after the exit time to avoid overlapping trades
+                            i = exit_index
 
             # Calculate final metrics
             if backtest_results["total_trades"] > 0:
@@ -531,9 +653,12 @@ class TradingStrategyService:
                 backtest_results["average_profit_per_trade"] = (
                     backtest_results["total_profit_loss"] / backtest_results["total_trades"]
                 )
-                backtest_results["max_drawdown"] = (
-                    (max_balance - min(account_balance, max_balance)) / max_balance
-                ) * 100
+
+            # Calculate max drawdown
+            if max_balance > min_balance:
+                backtest_results["max_drawdown"] = ((max_balance - min_balance) / max_balance) * 100
+            else:
+                backtest_results["max_drawdown"] = 0
 
             backtest_results["final_balance"] = account_balance
             backtest_results["total_return_percent"] = (
