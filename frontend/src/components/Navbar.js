@@ -20,6 +20,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate } from 'react-router-dom';
 import { logout, getCurrentUser } from '../services/auth';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
 // Custom styled components
 const Search = styled('div')(({ theme }) => ({
@@ -130,6 +131,14 @@ const Navbar = () => {
     logout();
     navigate('/login');
   };
+
+  const navItems = [
+    {
+      text: 'Cross Prev High',
+      icon: <TrendingUpIcon />,
+      path: '/stocks/crossing-prev-high'
+    },
+  ];
 
   return (
     <AppBar position="fixed" color="inherit" elevation={1}>

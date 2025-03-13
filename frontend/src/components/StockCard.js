@@ -35,14 +35,16 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
           price: response.data.price,
           // Mock data for demonstration
           change: (Math.random() * 5 - 2.5).toFixed(2),
-          changePercent: (Math.random() * 5 - 2.5).toFixed(2)
+          changePercent: (Math.random() * 5 - 2.5).toFixed(2),
+          previous_day_high: response.data.prev_day_high
         });
       } catch (error) {
         console.error('Error fetching stock data:', error);
         setStockData({
           price: 0,
           change: 0,
-          changePercent: 0
+          changePercent: 0,
+          previous_day_high: 'N/A'
         });
       } finally {
         setIsLoading(false);
@@ -136,6 +138,10 @@ const StockCard = ({ symbol, name, onAddAlert }) => {
                   sx={{ fontWeight: 'bold', borderRadius: 1 }}
                 />
               </Box>
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontWeight: 'bold' }}>
+                Previous High: ${stockData?.prev_day_high ? Number(stockData.prev_day_high).toFixed(2) : 'N/A'}
+              </Typography>
             </>
           )}
         </Box>

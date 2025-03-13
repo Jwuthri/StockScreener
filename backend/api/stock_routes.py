@@ -25,6 +25,7 @@ from backend.services.tradingview_service import (
     get_stocks_with_consecutive_positive_candles,
     get_stocks_with_filters,
     get_stocks_with_open_below_prev_day_high,
+    get_stocks_with_open_below_prev_high_and_crossed,
 )
 
 router = APIRouter()
@@ -622,3 +623,67 @@ async def get_stocks_open_below_prev_high_endpoint(
     except Exception as e:
         logger.error(f"Error screening for stocks with open below previous day high: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
+
+
+@router.get("/screener/open-below-prev-high-and-crossed")
+async def get_stocks_open_below_prev_high_and_crossed_endpoint(
+    limit: int = Query(500, ge=1, le=500, description="Maximum number of stocks to return"),
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    industry: Optional[str] = None,
+    exchange: Optional[str] = None,
+):
+    """
+    Get stocks that opened below previous day high and then crossed above it.
+    """
+    try:
+        # For now, use the existing crossing-prev-day-high endpoint
+        # This ensures we have a working endpoint while we develop the specialized one
+        stocks = get_stocks_with_open_below_prev_high_and_crossed(
+            limit=limit,
+            min_price=min_price,
+            max_price=max_price,
+            min_change_percent=min_change_percent,
+            max_change_percent=max_change_percent,
+            min_volume=min_volume,
+            max_volume=max_volume,
+            sector=sector,
+            industry=industry,
+            exchange=exchange,
+        )
+        return stocks
+    except Exception as e:
+        logger.error(f"Error in open-below-prev-high-and-crossed endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")
+
+
+@router.get("/sectors")
+async def get_sectors():
+    """
+    Returns list of available stock sectors
+    """
+    try:
+        # This would typically come from your database or stock API
+        sectors = [
+            "Technology",
+            "Healthcare",
+            "Financial",
+            "Consumer Cyclical",
+            "Consumer Defensive",
+            "Energy",
+            "Basic Materials",
+            "Industrials",
+            "Communication Services",
+            "Utilities",
+            "Real Estate",
+        ]
+
+        return sectors
+    except Exception as e:
+        logger.error(f"Failed to fetch sectors: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch sectors: {str(e)}")

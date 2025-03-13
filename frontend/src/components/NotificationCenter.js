@@ -70,7 +70,7 @@ const NotificationCenter = () => {
                             <div className="stock-notification">
                                 <div className="notification-title">{stock.name}</div>
                                 <div className="notification-description">
-                                    just crossed above previous day high of ${stock.previous_day_high}
+                                    just crossed above previous day high of ${stock.prev_day_high}
                                 </div>
                                 <div className="notification-price">
                                     <span className="label">Current Price:</span> ${stock.current_price}

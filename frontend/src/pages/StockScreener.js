@@ -625,7 +625,7 @@ const StockTable = ({
                       {stock.open || 'N/A'}
                     </TableCell>
                     <TableCell align="right" sx={{ py: 2 }}>
-                      {stock.prevHigh || 'N/A'}
+                      {stock.previous_day_high || 'N/A'}
                     </TableCell>
                     <TableCell
                       align="right"
@@ -919,7 +919,9 @@ const StockScreener = () => {
                      (typeof stock.change_percent === 'number' ? formatPercentage(stock.change_percent) : 'N/A'),
 
       volume: stock.volume_display ||
-             (typeof stock.volume === 'number' ? formatVolume(stock.volume) : 'N/A')
+             (typeof stock.volume === 'number' ? formatVolume(stock.volume) : 'N/A'),
+
+      prev_day_high: stock.prev_day_high || stock.prev_day_high || 'N/A',
     }));
   };
 
@@ -1229,7 +1231,7 @@ const StockScreener = () => {
           price: formatPrice(stock.current_price),
           change_percent: formatPercentage(stock.change_percent),
           open: formatPrice(stock.open_price),
-          prevHigh: formatPrice(stock.prev_day_high),
+          previous_day_high: stock.previous_day_high || stock.prev_day_high || 'N/A',
           difference: formatPercentage(stock.diff_percent),
           volume: formatVolume(stock.volume),
           sector: stock.sector

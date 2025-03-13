@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import random
 from datetime import datetime, timedelta
 from enum import Enum
@@ -7,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import rookiepy
+import yfinance as yf
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install
@@ -1403,8 +1405,8 @@ def get_stocks_crossing_prev_day_high(limit: int = 100) -> List[Dict[str, Any]]:
                         logger.info(f"Reached limit of {limit} stocks, stopping search")
                         break
 
-            except Exception as e:
-                logger.warning(f"Error processing stock {symbol}: {str(e)}")
+            except Exception:
+                # logger.warning(f"Error processing stock {symbol}: {str(e)}")
                 continue
 
         logger.info(f"Found {len(crossing_stocks)} stocks crossing above previous day high")
@@ -1796,100 +1798,62 @@ def get_demo_chart_data(symbol, timeframe):
 
 def get_previous_day_data(symbol: str) -> Dict[str, Any]:
     """
-    Get previous day's high and low for a given stock.
+    Get previous trading day data for a specific stock symbol using Yahoo Finance.
 
     Args:
-        symbol: Stock symbol
+        symbol: Stock symbol (e.g., "AAPL")
 
     Returns:
-        Dictionary with previous day high and low
+        Dictionary containing previous day's trading data
     """
     try:
-        logger.info(f"Fetching previous day data for {symbol}")
+        logger.info(f"Fetching previous day data for {symbol} using Yahoo Finance")
 
-        # Get yesterday's date
-        today = datetime.now()
-        yesterday = today - timedelta(days=1)
+        from datetime import datetime, timedelta
 
-        # If yesterday was a weekend, go back to Friday
-        if yesterday.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-            days_to_subtract = yesterday.weekday() - 4  # Go back to Friday
-            yesterday = today - timedelta(days=days_to_subtract)
+        import pandas_market_calendars as mcal
+        import yfinance as yf
 
-        # Format date as YYYY-MM-DD
-        date_str = yesterday.strftime("%Y-%m-%d")
+        # Get the previous trading day
+        nyse = mcal.get_calendar("NYSE")
+        today = datetime.now().date()
 
-        # Instead of using get_bars (which is not available), use current data
-        # and estimate previous day's data
-        try:
-            # Try to get the current data for the stock
-            tv_cookies = get_cookies_from_browser()
-            count, df = (
-                Query()
-                .select("open", "close", "high", "low", "volume", "change")
-                .where(col("active_symbol") == True)
-                .where(col("name") == symbol)
-                .get_scanner_data(cookies=tv_cookies)
-            )
+        # Get the last 5 trading days to find the previous trading day
+        trading_days = nyse.valid_days(start_date=today - timedelta(days=10), end_date=today)
+        if len(trading_days) < 2:
+            logger.warning(f"Could not determine previous trading day for {symbol}")
+            return {}
 
-            if df.empty:
-                logger.warning(f"No data found for {symbol}")
-                return {
-                    "previous_day_high": None,
-                    "previous_day_low": None,
-                    "previous_day_open": None,
-                    "previous_day_close": None,
-                    "previous_day_volume": None,
-                }
+        prev_trading_day = trading_days[-2].strftime("%Y-%m-%d")
 
-            # Get the current row
-            current_data = df.iloc[0]
+        # Fetch data from Yahoo Finance
+        # Get data for a slightly longer period to ensure we have the previous day
+        start_date = (trading_days[-2] - timedelta(days=5)).strftime("%Y-%m-%d")
+        end_date = prev_trading_day
 
-            # Extract current price
-            current_price = float(current_data.get("close", 0))
-            current_change_pct = float(current_data.get("change", 0))
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(start=start_date, end=end_date, interval="1d")
 
-            # Calculate previous day close based on current price and percentage change
-            prev_day_close = current_price / (1 + (current_change_pct / 100))
+        if hist.empty:
+            logger.warning(f"No historical data found for {symbol}")
+            return {}
 
-            # Estimate previous day high and low
-            # This is a fallback method since we don't have access to historical bars
-            # In a production system, you would use a more accurate data source
-            prev_day_high = prev_day_close * 1.02  # Estimate as 2% above previous close
-            prev_day_low = prev_day_close * 0.98  # Estimate as 2% below previous close
-            prev_day_open = prev_day_close * 0.99  # Estimate as 1% below previous close
-            prev_day_volume = int(current_data.get("volume", 0) * 0.9)  # Slightly less volume than today
+        # Get the last row which should be the previous trading day
+        prev_day_data = hist.iloc[-1]
 
-            logger.info(f"Estimated previous day data for {symbol} based on current price and change")
-
-            return {
-                "previous_day_high": float(prev_day_high),
-                "previous_day_low": float(prev_day_low),
-                "previous_day_open": float(prev_day_open),
-                "previous_day_close": float(prev_day_close),
-                "previous_day_volume": int(prev_day_volume),
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting scanner data for {symbol}: {str(e)}")
-            # If we couldn't get scanner data, return None values
-            return {
-                "previous_day_high": None,
-                "previous_day_low": None,
-                "previous_day_open": None,
-                "previous_day_close": None,
-                "previous_day_volume": None,
-            }
+        return {
+            "symbol": symbol,
+            "previous_day_date": prev_trading_day,
+            "previous_day_open": float(prev_day_data["Open"]),
+            "previous_day_high": float(prev_day_data["High"]),
+            "previous_day_low": float(prev_day_data["Low"]),
+            "previous_day_close": float(prev_day_data["Close"]),
+            "previous_day_volume": int(prev_day_data["Volume"]),
+        }
 
     except Exception as e:
-        logger.error(f"Error fetching previous day data for {symbol}: {str(e)}")
-        return {
-            "previous_day_high": None,
-            "previous_day_low": None,
-            "previous_day_open": None,
-            "previous_day_close": None,
-            "previous_day_volume": None,
-        }
+        logger.error(f"Error fetching previous day data for {symbol} using Yahoo Finance: {str(e)}")
+        return {}
 
 
 def get_first_five_min_candle(symbol: str) -> Dict[str, Any]:
@@ -2004,10 +1968,10 @@ def get_stocks_with_open_below_prev_day_high(
     max_price: float = 10,
     batch_size: int = 250,
     min_volume: int = 250_000,
-    min_diff_percent: float = -20.0,
-    max_diff_percent: float = 0.0,
-    min_change_percent: float = -20.0,
-    max_change_percent: float = 0.0,
+    min_diff_percent: float = 1.0,
+    max_diff_percent: float = 10000.0,
+    min_change_percent: float = 1.0,
+    max_change_percent: float = 1000.0,
 ) -> List[Dict[str, Any]]:
     """
     Get stocks where the current day's open price is below the previous day's high.
@@ -2049,8 +2013,10 @@ def get_stocks_with_open_below_prev_day_high(
                 "market_cap_basic",
             )
             .where(col("active_symbol") == True)
-            .where(col("close") < max_price)
-            .where(col("exchange").isin(["NASDAQ"]))
+            .where(col("volume") > min_volume)
+            .where(col("high") < max_price)
+            .where(col("high") > min_price)
+            .where(col("exchange").isin(["NASDAQ", "NYSE"]))
             .order_by("close", ascending=True)
             .limit(5000)
             .get_scanner_data(cookies=tv_cookies)
@@ -2088,7 +2054,6 @@ def get_stocks_with_open_below_prev_day_high(
                 "industry": stock.industry,
             }
             data.append(record)
-
         # Create DataFrame
         df = pd.DataFrame(data)
 
@@ -2179,9 +2144,41 @@ def get_stocks_with_open_below_prev_day_high(
 
                     open_below_prev_high_stocks.append(stock_data)
 
-            except Exception as e:
-                logger.warning(f"Error processing stock {symbol}: {str(e)}")
+            except Exception:
+                # logger.warning(f"Error processing stock {symbol}: {str(e)}")
                 continue
+
+        # if not open_below_prev_high_stocks:
+        #     open_below_prev_high_stocks = [{
+        #         "symbol": "AAPL",
+        #         "name": "Apple Inc.",
+        #         "open_price": "187.50",
+        #         "prev_day_high": "190.00",
+        #         "current_price": "192.35",
+        #         "diff_percent": "1.32",
+        #         "change_percent": "2.59",
+        #         "volume": "65432100",
+        #         "market_cap": "3012500000000",
+        #         "exchange": "NASDAQ",
+        #         "sector": "Technology",
+        #         "industry": "Consumer Electronics",
+        #         "is_new": True
+        #     },
+        #     {
+        #         "symbol": "MSFT",
+        #         "name": "Microsoft Corporation",
+        #         "open_price": "378.20",
+        #         "prev_day_high": "380.00",
+        #         "current_price": "382.70",
+        #         "diff_percent": "-0.47",
+        #         "change_percent": "1.19",
+        #         "volume": "23456700",
+        #         "market_cap": "2845000000000",
+        #         "exchange": "NASDAQ",
+        #         "sector": "Technology",
+        #         "industry": "Software",
+        #         "is_new": False
+        #     }]
 
         # Sort results by diff_percent (largest difference first)
         if open_below_prev_high_stocks:  # Only sort if the list is not empty
@@ -2204,7 +2201,7 @@ def get_stocks_with_filters_no_post_filters(
     sector: Optional[str] = None,
     date: Optional[str] = None,
     limit: int = 50,
-) -> List[Dict[str, Any]]:
+) -> pd.DataFrame:
     """
     Get stocks filtered by various criteria using TradingView API.
 
@@ -2228,7 +2225,18 @@ def get_stocks_with_filters_no_post_filters(
             # Since TradingView API doesn't directly support historical data for screeners,
             # we'll return a demo dataset when a date is specified
             # In a production environment, you would integrate with a historical data provider
-            return get_demo_stocks_for_date(date, limit)
+            p = date.replace("-", "").replace("/", "")
+            return get_previous_day_stocks_from_file(
+                path=f"/Users/julienwuthrich/Downloads/{p}_d.txt",
+                min_price=min_price,
+                max_price=max_price,
+                min_change_percent=min_change_percent,
+                max_change_percent=max_change_percent,
+                min_volume=min_volume,
+                max_volume=max_volume,
+                sector=sector,
+                limit=limit,
+            )
 
         logger.info("Fetching filtered stocks using TradingView API")
 
@@ -2538,6 +2546,470 @@ def check_stocks_cross_above_prev_day_high(stock_symbols: List[str], test_mode: 
 
     except Exception as e:
         logger.error(f"Error checking for stocks crossing above previous day high: {str(e)}")
+        return []
+
+
+def get_stocks_with_open_below_prev_high_and_crossed(
+    limit=250,
+    min_price=None,
+    max_price=None,
+    min_volume=None,
+    max_volume=None,
+    sector=None,
+    industry=None,
+    exchange=None,
+    min_change_percent=None,
+    max_change_percent=None,
+):
+    """
+    Get stocks that opened below previous day high and then crossed above it.
+
+    This is a specialized screener for day traders looking for stocks that:
+    1. Opened below the previous day's high (potential resistance)
+    2. Then crossed above that level (breakout)
+    """
+    logger.info(f"Fetching stocks that opened below prev high and crossed it (limit: {limit})")
+
+    try:
+        # First, get stocks with open below previous day high
+        open_below_stocks = get_stocks_with_open_below_prev_day_high(
+            limit=limit * 2,  # Get more to filter from
+            min_price=min_price,
+            max_price=max_price,
+            min_volume=min_volume,
+            batch_size=1000,
+        )
+
+        # Now filter for those that have crossed above the previous day high
+        crossed_stocks = []
+        for stock in open_below_stocks:
+            try:
+                symbol = stock.get("symbol")
+                if not symbol:
+                    continue
+
+                # Get current price and previous day high
+                current_price = stock.get("current_price", "0")
+                prev_day_high = stock.get("prev_day_high", "0")
+
+                # Check if it has crossed above
+                if current_price > prev_day_high:
+                    # Apply additional filters
+                    if min_change_percent is not None and float(stock.get("change_percent", "0")) < min_change_percent:
+                        continue
+
+                    if max_change_percent is not None and float(stock.get("change_percent", "0")) > max_change_percent:
+                        continue
+
+                    if sector and stock.get("sector", "").lower() != sector.lower():
+                        continue
+
+                    if industry and stock.get("industry", "").lower() != industry.lower():
+                        continue
+
+                    if exchange and stock.get("exchange", "").lower() != exchange.lower():
+                        continue
+
+                    # Add to our result list
+                    crossed_stocks.append(stock)
+
+                    # Break if we have enough
+                    if len(crossed_stocks) >= limit:
+                        break
+
+            except Exception:
+                # logger.warning(f"Error processing stock {stock.get('symbol')}: {str(e)}")
+                continue
+
+        logger.info(f"Found {len(crossed_stocks)} stocks that opened below prev high and crossed it")
+
+        return crossed_stocks
+
+    except Exception as e:
+        logger.error(f"Error in get_stocks_with_open_below_prev_high_and_crossed: {str(e)}")
+        return []
+
+
+def get_previous_day_stocks_from_file(
+    path: str,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Get stocks from the previous trading day filtered by various criteria using Yahoo Finance.
+
+    Args:
+        min_price: Minimum stock price
+        max_price: Maximum stock price
+        min_change_percent: Minimum percentage change
+        max_change_percent: Maximum percentage change
+        min_volume: Minimum trading volume
+        max_volume: Maximum trading volume
+        sector: Stock sector (e.g., "Technology")
+        limit: Maximum number of stocks to return
+
+    Returns:
+        List of dictionaries containing stock information from the previous trading day
+    """
+    try:
+        logger.info("Fetching filtered stocks from previous trading day using Yahoo Finance")
+        if not os.path.exists(path):
+            logger.error(f"File does not exist: {path}")
+            return []
+
+        df = pd.read_csv(path)
+        results = []
+        for index, row in df.iterrows():
+            # <TICKER>,<PER>,<DATE>,<TIME>,<OPEN>,<HIGH>,<LOW>,<CLOSE>,<VOL>,<OPENINT>
+            symbol = row["<TICKER>"]
+            prev_day_date = row["<DATE>"]
+            prev_day_open = row["<OPEN>"]
+            prev_day_high = row["<HIGH>"]
+            prev_day_low = row["<LOW>"]
+            prev_day_close = row["<CLOSE>"]
+            prev_day_volume = row["<VOL>"]
+            # Add to results
+            stock_result = {
+                "ticker": symbol,
+                "name": symbol,
+                "previous_day_date": prev_day_date,
+                "open": float(prev_day_open),
+                "high": float(prev_day_high),
+                "low": float(prev_day_low),
+                "close": float(prev_day_close),
+                "volume": int(prev_day_volume),
+                "change_percent": None,
+                "change_abs": None,
+            }
+            results.append(stock_result)
+
+        return pd.DataFrame(results)
+
+    except Exception as e:
+        logger.error(f"Error fetching previous day filtered stocks using Yahoo Finance: {str(e)}")
+        return []
+
+
+def get_previous_day_stocks_with_filters(
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Get stocks from the previous trading day filtered by various criteria using Yahoo Finance.
+
+    Args:
+        min_price: Minimum stock price
+        max_price: Maximum stock price
+        min_change_percent: Minimum percentage change
+        max_change_percent: Maximum percentage change
+        min_volume: Minimum trading volume
+        max_volume: Maximum trading volume
+        sector: Stock sector (e.g., "Technology")
+        limit: Maximum number of stocks to return
+
+    Returns:
+        List of dictionaries containing stock information from the previous trading day
+    """
+    try:
+        logger.info("Fetching filtered stocks from previous trading day using Yahoo Finance")
+
+        from datetime import datetime, timedelta
+
+        import pandas_market_calendars as mcal
+        import yfinance as yf
+
+        # Get the previous trading day
+        nyse = mcal.get_calendar("NYSE")
+        today = datetime.now().date()
+
+        # Get the last 5 trading days to find the previous trading day
+        trading_days = nyse.valid_days(start_date=today - timedelta(days=10), end_date=today)
+        if len(trading_days) < 2:
+            logger.warning("Could not determine previous trading day")
+            return []
+
+        prev_trading_day = trading_days[-2].strftime("%Y-%m-%d")
+        day_before_prev = (trading_days[-2] - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # First, get a list of stocks that match basic filters
+        # We'll use the current day data to get a list of symbols
+        # For this example, we'll use a predefined list of major stocks
+        # In a production environment, you would use a more comprehensive list
+
+        # Option 1: Use a predefined list of major stocks
+        df = get_stocks_with_filters(
+            min_price=min_price,
+            max_price=max_price,
+            min_change_percent=min_change_percent,
+            max_change_percent=max_change_percent,
+            min_volume=min_volume,
+            max_volume=max_volume,
+            sector=sector,
+            limit=limit,
+        )
+
+        # Option 2: Use a stock screener API to get a larger list
+        # For example, you could use the finviz screener or another service
+
+        # For this implementation, we'll use the predefined list
+        symbols_to_check = [x["symbol"] for x in df]
+
+        # Fetch data for all symbols at once (more efficient)
+        datas = []
+        for x in symbols_to_check:
+            data = yf.download(x, start=day_before_prev, end=prev_trading_day, group_by="ticker")
+            datas.append(data)
+
+        results = []
+        for symbol in symbols_to_check:
+            try:
+                if symbol not in data.columns.levels[0]:
+                    continue
+
+                # Get data for this symbol
+                stock_data = data[symbol]
+
+                if stock_data.empty or len(stock_data) < 2:
+                    continue
+
+                # Get previous day data
+                prev_day = stock_data.iloc[-1]
+                day_before = stock_data.iloc[-2]
+
+                # Calculate change percentage
+                prev_close = prev_day["Close"]
+                day_before_close = day_before["Close"]
+                change_percent = ((prev_close - day_before_close) / day_before_close) * 100
+                change_abs = prev_close - day_before_close
+
+                # Apply filters
+                if min_price is not None and prev_close < min_price:
+                    continue
+                if max_price is not None and prev_close > max_price:
+                    continue
+                if min_change_percent is not None and change_percent < min_change_percent:
+                    continue
+                if max_change_percent is not None and change_percent > max_change_percent:
+                    continue
+                if min_volume is not None and prev_day["Volume"] < min_volume:
+                    continue
+                if max_volume is not None and prev_day["Volume"] > max_volume:
+                    continue
+
+                # Get additional info like sector if needed
+                if sector is not None:
+                    ticker_info = yf.Ticker(symbol).info
+                    stock_sector = ticker_info.get("sector", "")
+                    if stock_sector != sector:
+                        continue
+
+                # Add to results
+                stock_result = {
+                    "symbol": symbol,
+                    "previous_day_date": prev_trading_day,
+                    "previous_day_open": float(prev_day["Open"]),
+                    "previous_day_high": float(prev_day["High"]),
+                    "previous_day_low": float(prev_day["Low"]),
+                    "previous_day_close": float(prev_day["Close"]),
+                    "previous_day_volume": int(prev_day["Volume"]),
+                    "change_percent": float(change_percent),
+                    "change_abs": float(change_abs),
+                }
+
+                # Add sector info if we fetched it
+                if sector is not None:
+                    stock_result["sector"] = stock_sector
+
+                results.append(stock_result)
+
+                if len(results) >= limit:
+                    break
+
+            except Exception as e:
+                logger.warning(f"Error processing {symbol}: {str(e)}")
+                continue
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error fetching previous day filtered stocks using Yahoo Finance: {str(e)}")
+        return []
+
+
+def get_previous_day_stocks_with_yahoo_screener(
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    sector: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Get stocks from the previous trading day filtered by various criteria using Yahoo Finance screener.
+
+    Args:
+        min_price: Minimum stock price
+        max_price: Maximum stock price
+        min_change_percent: Minimum percentage change
+        max_change_percent: Maximum percentage change
+        min_volume: Minimum trading volume
+        max_volume: Maximum trading volume
+        sector: Stock sector (e.g., "Technology")
+        limit: Maximum number of stocks to return
+
+    Returns:
+        List of dictionaries containing stock information from the previous trading day
+    """
+    try:
+        # logger.info("Fetching filtered stocks from previous trading day using Yahoo Finance screener")
+
+        # import requests
+        # import pandas as pd
+        # import yfinance as yf
+        # from datetime import datetime, timedelta
+        # import pandas_market_calendars as mcal
+
+        # # Get the previous trading day
+        # nyse = mcal.get_calendar('NYSE')
+        # today = datetime.now().date()
+
+        # # Get the last 5 trading days to find the previous trading day
+        # trading_days = nyse.valid_days(start_date=today-timedelta(days=10), end_date=today)
+        # if len(trading_days) < 2:
+        #     logger.warning("Could not determine previous trading day")
+        #     return []
+
+        # prev_trading_day = trading_days[-2].strftime('%Y-%m-%d')
+        # breakpoint()
+
+        # # Use Yahoo Finance screener API to get a list of stocks
+        # url = "https://query1.finance.yahoo.com/v1/finance/screener"
+
+        # # Build the screener query
+        # query = {
+        #     "formatted": True,
+        #     "lang": "en-US",
+        #     "region": "US",
+        #     "corsDomain": "finance.yahoo.com"
+        # }
+
+        # # Build the screener criteria
+        # criteria = []
+        # if min_price is not None:
+        #     criteria.append({"field": "regularMarketPrice", "min": min_price})
+        # if max_price is not None:
+        #     criteria.append({"field": "regularMarketPrice", "max": max_price})
+        # if min_volume is not None:
+        #     criteria.append({"field": "averageDailyVolume3Month", "min": min_volume})
+        # if max_volume is not None:
+        #     criteria.append({"field": "averageDailyVolume3Month", "max": max_volume})
+        # if min_change_percent is not None:
+        #     criteria.append({"field": "regularMarketChangePercent", "min": min_change_percent})
+        # if max_change_percent is not None:
+        #     criteria.append({"field": "regularMarketChangePercent", "max": max_change_percent})
+        # if sector is not None:
+        #     criteria.append({"field": "sector", "equals": sector})
+
+        # # Add exchange criteria for US stocks
+        # criteria.append({"field": "exchange", "equals": "NMS"})  # NASDAQ
+        # criteria.append({"field": "exchange", "equals": "NYQ"})  # NYSE
+
+        # # Prepare the payload
+        # payload = {
+        #     "size": limit * 2,  # Get more than needed to account for filtering
+        #     "offset": 0,
+        #     "sortField": "regularMarketVolume",
+        #     "sortType": "DESC",
+        #     "quoteType": "EQUITY",
+        #     "query": {
+        #         "operator": "AND",
+        #         "operands": criteria
+        #     },
+        #     "userId": "",
+        #     "userIdType": "guid"
+        # }
+
+        # # Make the request
+        # response = requests.post(url, json=payload)
+
+        # if response.status_code != 200:
+        #     logger.error(f"Yahoo Finance screener API request failed: {response.status_code}")
+        #     return []
+
+        # data = response.json()
+
+        # # Extract the symbols from the response
+        # symbols = []
+        # if "finance" in data and "result" in data["finance"] and len(data["finance"]["result"]) > 0:
+        #     quotes = data["finance"]["result"][0].get("quotes", [])
+        #     for quote in quotes:
+        #         symbol = quote.get("symbol")
+        #         if symbol:
+        #             symbols.append(symbol)
+
+        # if not symbols:
+        #     logger.warning("No symbols found from Yahoo Finance screener")
+        #     return []
+
+        # # Now fetch historical data for these symbols
+        # day_before_prev = (trading_days[-2] - timedelta(days=1)).strftime('%Y-%m-%d')
+        # historical_data = yf.download(symbols, start=day_before_prev, end=prev_trading_day, group_by='ticker')
+        recent_data = yf.download("AAPL", period="5d")
+
+        # Process the results
+        results = []
+        # for symbol in symbols:
+        #     try:
+        #         if symbol not in historical_data.columns.levels[0]:
+        #             continue
+
+        #         # Get data for this symbol
+        #         stock_data = historical_data[symbol]
+
+        #         if stock_data.empty or len(stock_data) < 2:
+        #             continue
+
+        #         # Get previous day data
+        #         prev_day = stock_data.iloc[-1]
+
+        #         # Add to results
+        #         stock_result = {
+        #             "symbol": symbol,
+        #             "previous_day_date": prev_trading_day,
+        #             "previous_day_open": float(prev_day["Open"]),
+        #             "previous_day_high": float(prev_day["High"]),
+        #             "previous_day_low": float(prev_day["Low"]),
+        #             "previous_day_close": float(prev_day["Close"]),
+        #             "previous_day_volume": int(prev_day["Volume"])
+        #         }
+
+        #         results.append(stock_result)
+
+        #         if len(results) >= limit:
+        #             break
+
+        #     except Exception as e:
+        #         logger.warning(f"Error processing {symbol}: {str(e)}")
+        #         continue
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error fetching previous day filtered stocks using Yahoo Finance screener: {str(e)}")
         return []
 
 

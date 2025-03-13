@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 // Icons
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
@@ -22,6 +23,7 @@ import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import TrendingDownOutlinedIcon from '@mui/icons-material/TrendingDownOutlined';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import StarOutlineOutlinedIcon from '@mui/icons-material/StarOutlineOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
 const drawerWidth = 220;
 
@@ -241,6 +243,41 @@ const Sidebar = () => {
               }}
             />
           </StyledListItem>
+
+          <StyledListItem
+            button
+            onClick={() => navigate('/stocks/crossing-prev-high')}
+          >
+            <ListItemIcon sx={{
+              minWidth: 36,
+              color: theme.palette.common.black
+            }}>
+              <ShowChartOutlinedIcon />
+            </ListItemIcon>
+            <ListItemText
+              primary="Cross Prev High"
+              primaryTypographyProps={{
+                fontWeight: 500,
+                fontSize: '0.95rem'
+              }}
+            />
+
+          </StyledListItem>
+          {/* <ListItem
+            button
+            component={Link}
+            to="/stocks/crossing-prev-high"
+            sx={{
+              pl: 2,
+              py: 1,
+              '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+            }}
+          >
+            <ListItemIcon>
+              <TrendingUpIcon color="success" />
+            </ListItemIcon>
+            <ListItemText primary="Cross High" />
+          </ListItem> */}
         </List>
       </Box>
     </Drawer>

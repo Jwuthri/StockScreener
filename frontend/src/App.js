@@ -17,6 +17,7 @@ import StockScreener from './pages/StockScreener';
 import Alerts from './pages/Alerts';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import StocksCrossingPrevHighPage from './pages/StocksCrossingPrevHighPage';
 
 // Auth
 import { isAuthenticated } from './services/auth';
@@ -103,6 +104,7 @@ function App() {
               </AuthenticatedLayout>
             </ProtectedRoute>
           } />
+          <Route path="/stocks/crossing-prev-high" element={<StocksCrossingPrevHighPage />} />
 
           {/* Redirect all other routes to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

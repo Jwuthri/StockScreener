@@ -151,8 +151,9 @@ async def startup_event():
         initialize_db()
 
         # Start periodic tasks
-        asyncio.create_task(periodic_stock_screener())
-        asyncio.create_task(monitor_open_below_prev_high_stocks())
+        # asyncio.create_task(periodic_stock_screener())
+        # asyncio.create_task(monitor_open_below_prev_high_stocks())
+        # TODO JOBS
 
         logger.info("Background tasks scheduled")
     except Exception as e:
@@ -289,7 +290,7 @@ async def periodic_stock_screener():
             logger.error(f"Error in periodic stock screener: {e}")
 
         # Run every 5 minutes
-        await asyncio.sleep(300)
+        await asyncio.sleep(30000)
 
 
 async def monitor_open_below_prev_high_stocks():
