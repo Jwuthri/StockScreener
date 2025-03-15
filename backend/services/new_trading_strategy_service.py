@@ -22,18 +22,12 @@ class TradingStrategyService:
         self.market_close_time = datetime(now.year, now.month, now.day, hour=13, minute=0, second=0).replace(
             tzinfo=timezone(timedelta(hours=-8))
         )
-        self.current_positions = self.alpaca.get_positions()
-        self.account = self.alpaca.get_account_info()
 
-    def calculate_position_size(self, risk_percentage, stop_loss_percentage):
+    def calculate_position_size(self, account_info, risk_percentage, stop_loss_percentage):
         """Calculate position size based on account risk management"""
-        account_info = self.alpaca.get_account_info()
         buying_power = float(account_info["buying_power"])
         risk_amount = buying_power * (risk_percentage / 100)
         return risk_amount / (stop_loss_percentage / 100)
-
-    def has_enough_buying_power(self, position_size_percentage, stop_loss_percentage):
-        return self.calculate_position_size(position_size_percentage, stop_loss_percentage) > 0
 
     async def execute_prev_day_high_strategy(self, params):
         """
@@ -89,7 +83,7 @@ class TradingStrategyService:
 
                 # Calculate position size
                 position_size = self.calculate_position_size(
-                    params.get("position_size_percentage", 5), params.get("stop_loss_percentage", 2)
+                    account, params.get("position_size_percentage", 5), params.get("stop_loss_percentage", 2)
                 )
 
                 # Calculate number of shares
@@ -183,7 +177,7 @@ class TradingStrategyService:
 
                 # Calculate position size
                 position_size = self.calculate_position_size(
-                    params.get("position_size_percentage", 5), params.get("stop_loss_percentage", 2)
+                    account, params.get("position_size_percentage", 5), params.get("stop_loss_percentage", 2)
                 )
 
                 # Calculate number of shares
@@ -217,6 +211,124 @@ class TradingStrategyService:
 
         except Exception as e:
             logger.error(f"Error executing consecutive positive candles strategy: {str(e)}")
+            return {"success": False, "message": f"Error executing strategy: {str(e)}", "positions_taken": 0}
+
+    async def execute_open_below_prev_high_strategy(self, params):
+        """
+        Strategy that buys stocks that opened below previous day's high
+
+        Modified strategy flow:
+        1. After first 5 minutes of market open, scan for stocks meeting parameters
+        2. For each stock, monitor until price reaches previous day's high + 0.5%
+        3. Buy the stock when target price is reached
+        4. Hold for exactly 5 minutes, then sell
+
+        params:
+        - max_positions: Maximum number of positions to take
+        - position_size_percentage: Percentage of buying power to use per position
+        - min_price: Minimum stock price
+        - max_price: Maximum stock price
+        - min_volume: Minimum volume
+        - min_diff_percent: Minimum percentage below previous high
+        - max_diff_percent: Maximum percentage below previous high
+        """
+        try:
+            # Get account info
+            account = self.alpaca.get_account_info()
+
+            # Get current positions
+            current_positions = self.alpaca.get_positions()
+            current_symbols = [p["symbol"] for p in current_positions]
+
+            # Get stocks that opened below previous day's high
+            screener_params = {
+                "min_price": params.get("min_price", 1),
+                "max_price": params.get("max_price", 20),
+                "min_volume": params.get("min_volume", 500_000),
+                "min_diff_percent": params.get("min_diff_percent", 1),
+                "max_diff_percent": params.get("max_diff_percent", 100),
+                "min_change_percent": params.get("min_change_percent", 1),
+                "max_change_percent": params.get("max_change_percent", 100),
+                "limit": params.get("limit", 1000),
+            }
+
+            # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
+            now = datetime.now()
+            market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
+                tzinfo=timezone(timedelta(hours=-8))
+            )  # PST timezone
+
+            five_min_after_open = market_open_time + timedelta(minutes=5)
+            current_time = datetime.now(timezone(timedelta(hours=-8)))
+
+            if current_time < five_min_after_open:
+                wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
+                logger.info(f"Waiting {wait_seconds} seconds until 5 minutes after market open")
+                await asyncio.sleep(wait_seconds)
+
+            # Get stocks that opened below previous day's high
+            stocks = await self.screener.get_stocks_open_below_prev_high(screener_params)
+            processed_stocks = self.screener.process_screener_results(stocks, params.get("max_positions", 1000))
+            # processed_stocks = stocks
+            # Filter out stocks we already have positions in
+            new_opportunities = [stock for stock in processed_stocks if stock["symbol"] not in current_symbols]
+
+            # Calculate how many new positions we can take
+            max_new_positions = params.get("max_positions", 10000) - len(current_positions)
+
+            if max_new_positions <= 0:
+                logger.info("Maximum positions reached, not taking new trades")
+                return {
+                    "success": True,
+                    "message": "Maximum positions reached, not taking new trades",
+                    "positions_taken": 0,
+                }
+
+            # Initialize tracking dictionary for active strategies
+            for stock in new_opportunities[:max_new_positions]:
+                symbol = stock["symbol"]
+                self.active_strategies[symbol] = False
+
+            # Take positions in new opportunities
+            positions_taken = 0
+            monitoring_tasks = []
+
+            breakpoint()
+            for stock in new_opportunities[:max_new_positions]:
+                symbol = stock["symbol"]
+                current_price = float(stock["current_price"])
+                prev_day_high = float(stock["prev_day_high"])
+
+                # Calculate target price (previous day's high + 0.5%)
+                target_price = prev_day_high * 1.0005
+
+                # Calculate position size
+                position_size = self.calculate_position_size(account, params.get("position_size_percentage", 10), 100)
+
+                # Calculate number of shares
+                shares = int(position_size / target_price)
+
+                if shares < 1:
+                    logger.info(f"Not enough buying power to purchase {symbol}")
+                    continue
+
+                # Create a task to monitor this stock
+                task = asyncio.create_task(self._monitor_and_trade_stock(symbol, target_price, shares, position_size))
+                monitoring_tasks.append(task)
+
+            # Wait for all monitoring tasks to complete
+            if monitoring_tasks:
+                results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
+                positions_taken = sum(1 for r in results if isinstance(r, dict) and r.get("success", False))
+
+            return {
+                "success": True,
+                "message": f"Strategy executed successfully. Took {positions_taken} new positions.",
+                "positions_taken": positions_taken,
+            }
+
+        except Exception as e:
+            logger.error(f"Error executing open below prev high strategy: {str(e)}")
             return {"success": False, "message": f"Error executing strategy: {str(e)}", "positions_taken": 0}
 
     async def _monitor_and_trade_stock(self, symbol, target_price, shares, position_size):
@@ -258,13 +370,9 @@ class TradingStrategyService:
                     break
 
                 try:
-                    current_price = await self.alpaca.get_current_price(symbol)
+                    current_price = self.alpaca.get_current_price(symbol)
                 except Exception:
                     current_price = get_stock_price_tv(symbol)["price"]
-
-                logger.info(
-                    f"Current price for {symbol}: ${current_price}, target price: ${target_price}, last price: ${last_price}"
-                )
 
                 # Detect crossing above target price (previous check below, current check above)
                 if (
@@ -274,16 +382,11 @@ class TradingStrategyService:
                     and not in_position
                 ):
                     # Price has crossed above target
-                    logger.critical(f"{symbol} crossed above target price of ${target_price}")
-                    account_info = self.alpaca.get_account_info()
-                    buying_power = float(account_info["buying_power"])
-                    if buying_power < position_size:
-                        logger.info(f"Not enough buying power to purchase {symbol}")
-                        continue
+                    logger.info(f"{symbol} crossed above target price of ${target_price}")
 
                     # Place market buy order
                     order = self.alpaca.place_market_order(symbol, shares, "buy")
-                    logger.critical(f"Bought {shares} shares of {symbol} at ${current_price}")
+                    logger.info(f"Bought {shares} shares of {symbol} at ${current_price}")
 
                     # Mark that we're in a position
                     in_position = True
@@ -343,7 +446,7 @@ class TradingStrategyService:
 
             # Get current price for logging
             try:
-                current_price = await self.alpaca.get_current_price(symbol)
+                current_price = self.alpaca.get_current_price(symbol)
             except Exception:
                 current_price = get_stock_price_tv(symbol)["price"]
 
@@ -573,110 +676,86 @@ class TradingStrategyService:
             logger.error(f"Error during backtest: {str(e)}")
             return {"success": False, "message": f"Error during backtest: {str(e)}"}
 
-    async def execute_open_below_prev_high_strategy(self, params):
-        """
-        Strategy that buys stocks that opened below previous day's high
-
-        Modified strategy flow:
-        1. After first 5 minutes of market open, scan for stocks meeting parameters
-        2. For each stock, monitor until price reaches previous day's high + 0.5%
-        3. Buy the stock when target price is reached
-        4. Hold for exactly 5 minutes, then sell
-
-        params:
-        - max_positions: Maximum number of positions to take
-        - position_size_percentage: Percentage of buying power to use per position
-        - min_price: Minimum stock price
-        - max_price: Maximum stock price
-        - min_volume: Minimum volume
-        - min_diff_percent: Minimum percentage below previous high
-        - max_diff_percent: Maximum percentage below previous high
-        """
+    async def execute_stocks_with_open_below_prev_high_and_crossed(self, params):
         try:
-            logger.info("Executing open below prev high strategy")
-            # Get current positions
-            current_symbols = [p["symbol"] for p in self.current_positions]
-
-            # Get stocks that opened below previous day's high
-            screener_params = {
-                "min_price": params.get("min_price", 1),
-                "max_price": params.get("max_price", 20),
-                "min_volume": params.get("min_volume", 500_000),
-                "min_diff_percent": params.get("min_diff_percent", 1),
-                "max_diff_percent": params.get("max_diff_percent", 100),
-                "min_change_percent": params.get("min_change_percent", 1),
-                "max_change_percent": params.get("max_change_percent", 100),
-                "limit": params.get("limit", 1000),
-            }
-
-            # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
-            now = datetime.now()
-            market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
-                tzinfo=timezone(timedelta(hours=-8))
-            )  # PST timezone
-
-            five_min_after_open = market_open_time + timedelta(minutes=5)
-            current_time = datetime.now(timezone(timedelta(hours=-8)))
-
-            if current_time < five_min_after_open:
-                wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
-                logger.info(f"Waiting {wait_seconds} seconds until 5 minutes after market open")
-                await asyncio.sleep(wait_seconds)
-
-            # Get stocks that opened below previous day's high
-            stocks = await self.screener.get_stocks_open_below_prev_high(screener_params)
-            processed_stocks = self.screener.process_screener_results(stocks, params.get("max_positions", 1000))
-
-            # Filter out stocks we already have positions in
-            new_opportunities = [stock for stock in processed_stocks if stock["symbol"] not in current_symbols]
-
-            # Calculate how many new positions we can take
-            max_new_positions = params.get("max_positions", 10000) - len(self.alpaca.get_positions())
-
-            if max_new_positions <= 0:
-                logger.info("Maximum positions reached, not taking new trades")
-                return {
-                    "success": True,
-                    "message": "Maximum positions reached, not taking new trades",
-                    "positions_taken": 0,
-                }
-
-            # Initialize tracking dictionary for active strategies
-            for stock in new_opportunities[:max_new_positions]:
-                symbol = stock["symbol"]
-                self.active_strategies[symbol] = False
-
-            # Take positions in new opportunities
             positions_taken = 0
-            monitoring_tasks = []
+            keep_going = True
+            while keep_going:
+                account = self.alpaca.get_account_info()
 
-            for stock in new_opportunities[:10]:
-                symbol = stock["symbol"]
-                current_price = float(stock["current_price"])
-                prev_day_high = float(stock["prev_day_high"])
+                # Get current positions
+                current_positions = self.alpaca.get_positions()
+                current_symbols = [p["symbol"] for p in current_positions]
 
-                # Calculate target price (previous day's high + 0.5%)
-                target_price = prev_day_high * 1.0005
+                # Get stocks that opened below previous day's high
+                screener_params = {
+                    "min_price": params.get("min_price", 1),
+                    "max_price": params.get("max_price", 20),
+                    "min_volume": params.get("min_volume", 500_000),
+                    "min_diff_percent": params.get("min_diff_percent", 1),
+                    "max_diff_percent": params.get("max_diff_percent", 100),
+                    "min_change_percent": params.get("min_change_percent", 1),
+                    "max_change_percent": params.get("max_change_percent", 100),
+                    "limit": params.get("limit", 1000),
+                }
+                # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
+                now = datetime.now()
+                market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
+                    tzinfo=timezone(timedelta(hours=-8))
+                )  # PST timezone
 
-                # Calculate position size
-                position_size = self.calculate_position_size(params.get("position_size_percentage", 10), 100)
+                five_min_after_open = market_open_time + timedelta(minutes=5)
+                current_time = datetime.now(timezone(timedelta(hours=-8)))
 
-                # Calculate number of shares
-                shares = int(position_size / target_price)
+                if current_time < five_min_after_open:
+                    wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
+                    logger.info(f"Waiting {wait_seconds} seconds until 5 minutes after market open")
 
-                if shares < 1:
-                    logger.info(f"Not enough buying power to purchase {symbol}")
-                    continue
+                stocks = await self.screener.get_stocks_open_below_prev_high_and_crossed(screener_params)
+                new_opportunities = [stock for stock in stocks if stock["symbol"] not in current_symbols]
+                # Calculate how many new positions we can take
+                max_new_positions = params.get("max_positions", 10000) - len(current_positions)
 
-                # Create a task to monitor this stock
-                logger.info(f"Monitoring {symbol} for crosses above ${target_price}")
-                task = asyncio.create_task(self._monitor_and_trade_stock(symbol, target_price, shares, position_size))
-                monitoring_tasks.append(task)
+                if max_new_positions <= 0:
+                    logger.info("Maximum positions reached, not taking new trades")
+                    return {
+                        "success": True,
+                        "message": "Maximum positions reached, not taking new trades",
+                        "positions_taken": 0,
+                    }
+                # Initialize tracking dictionary for active strategies
+                for stock in new_opportunities[:max_new_positions]:
+                    symbol = stock["symbol"]
+                    self.active_strategies[symbol] = False
 
-            # Wait for all monitoring tasks to complete
-            if monitoring_tasks:
-                results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
-                positions_taken = sum(1 for r in results if isinstance(r, dict) and r.get("success", False))
+                monitoring_tasks = []
+                breakpoint()
+                for stock in new_opportunities[:max_new_positions]:
+                    symbol = stock["symbol"]
+                    # current_price = float(stock["current_price"])
+                    prev_day_high = float(stock["prev_day_high"])
+                    # Calculate target price (previous day's high + 0.5%)
+                    target_price = prev_day_high * 1.0005
+                    # Calculate position size
+                    position_size = self.calculate_position_size(
+                        account, params.get("position_size_percentage", 10), 100
+                    )
+                    # Calculate number of shares
+                    shares = int(position_size / target_price)
+                    if shares < 1:
+                        logger.info(f"Not enough buying power to purchase {symbol}")
+                        continue
+
+                    # Create a task to monitor this stock
+                    task = asyncio.create_task(
+                        self._monitor_and_trade_stock(symbol, target_price, shares, position_size)
+                    )
+                    monitoring_tasks.append(task)
+
+                # Wait for all monitoring tasks to complete
+                if monitoring_tasks:
+                    results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
+                    positions_taken += sum(1 for r in results if isinstance(r, dict) and r.get("success", False))
 
             return {
                 "success": True,
@@ -685,25 +764,23 @@ class TradingStrategyService:
             }
 
         except Exception as e:
-            logger.error(f"Error executing open below prev high strategy: {str(e)}")
+            logger.error(f"Error executing stocks with open below prev high and crossed strategy: {str(e)}")
             return {"success": False, "message": f"Error executing strategy: {str(e)}", "positions_taken": 0}
 
 
 if __name__ == "__main__":
     x = TradingStrategyService()
     res = asyncio.run(
-        x.execute_open_below_prev_high_strategy(
+        x.execute_stocks_with_open_below_prev_high_and_crossed(
             params={
                 "min_price": 1,
-                "max_price": 10,
+                "max_price": 20,
                 "min_volume": 333_000,
                 "min_diff_percent": 1,
                 "max_diff_percent": 1000,
                 "min_change_percent": 1,
                 "max_change_percent": 1000,
                 "limit": 500,
-                "max_positions": 1000,
-                "position_size_percentage": 1,
             }
         )
     )

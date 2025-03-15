@@ -7,13 +7,23 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-import rookiepy
 import yfinance as yf
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install
 from tqdm import tqdm
 from tradingview_screener import Query, col
+
+# Set logging level to a higher level (ERROR or CRITICAL) to suppress INFO messages
+logging.getLogger("rookiepy").setLevel(logging.ERROR)
+logging.getLogger("chromium").setLevel(logging.ERROR)
+logging.getLogger("rust").setLevel(logging.ERROR)
+
+
+# Then use rookiepy as normal
+import rookiepy
+
+# your code here
 
 
 # Define Interval enum that was missing
@@ -51,40 +61,40 @@ def get_cookies_from_browser():
     First tries Arc, then falls back to Chrome, Safari, Firefox.
     """
     try:
-        logger.info("Attempting to extract TradingView cookies")
+        logger.debug("Attempting to extract TradingView cookies")
 
         # Try Arc browser first (since the user mentioned they use it)
         try:
-            logger.info("Trying to get cookies from Arc browser")
+            logger.debug("Trying to get cookies from Arc browser")
             cookies = rookiepy.to_cookiejar(rookiepy.arc([".tradingview.com"]))
-            logger.info("Successfully extracted cookies from Arc browser")
+            logger.debug("Successfully extracted cookies from Arc browser")
             return cookies
         except Exception as e:
             logger.warning(f"Couldn't get cookies from Arc: {str(e)}")
 
         # Try Chrome next
         try:
-            logger.info("Trying to get cookies from Chrome browser")
+            logger.debug("Trying to get cookies from Chrome browser")
             cookies = rookiepy.to_cookiejar(rookiepy.chrome([".tradingview.com"]))
-            logger.info("Successfully extracted cookies from Chrome browser")
+            logger.debug("Successfully extracted cookies from Chrome browser")
             return cookies
         except Exception as e:
             logger.warning(f"Couldn't get cookies from Chrome: {str(e)}")
 
         # Try Safari
         try:
-            logger.info("Trying to get cookies from Safari browser")
+            logger.debug("Trying to get cookies from Safari browser")
             cookies = rookiepy.to_cookiejar(rookiepy.safari([".tradingview.com"]))
-            logger.info("Successfully extracted cookies from Safari browser")
+            logger.debug("Successfully extracted cookies from Safari browser")
             return cookies
         except Exception as e:
             logger.warning(f"Couldn't get cookies from Safari: {str(e)}")
 
         # Try Firefox as a last resort
         try:
-            logger.info("Trying to get cookies from Firefox browser")
+            logger.debug("Trying to get cookies from Firefox browser")
             cookies = rookiepy.to_cookiejar(rookiepy.firefox([".tradingview.com"]))
-            logger.info("Successfully extracted cookies from Firefox browser")
+            logger.debug("Successfully extracted cookies from Firefox browser")
             return cookies
         except Exception as e:
             logger.warning(f"Couldn't get cookies from Firefox: {str(e)}")

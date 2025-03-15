@@ -21,7 +21,10 @@ class StockScreenerService:
                 async with session.get(f"{self.base_url}/api/stocks/screener/{endpoint}", params=params) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data.get("stocks", [])
+                        if "stocks" in data:
+                            return data.get("stocks", [])
+                        else:
+                            return data
                     else:
                         error_text = await response.text()
                         logger.error(f"Error fetching screener data: {error_text}")
@@ -49,6 +52,10 @@ class StockScreenerService:
     async def get_stocks_open_below_prev_high(self, params):
         """Get stocks that opened below previous day's high"""
         return await self._fetch_screener_results("open-below-prev-high", params)
+
+    async def get_stocks_open_below_prev_high_and_crossed(self, params):
+        """Get stocks that opened below previous day's high and then crossed above it"""
+        return await self._fetch_screener_results("open-below-prev-high-and-crossed", params)
 
     async def get_top_gainers(self, params):
         """Get top gaining stocks"""
@@ -131,6 +138,9 @@ class StockScreenerService:
                 "name": stock.get("name", symbol),
                 "price": price,
                 "change_percent": stock.get("change_percent", "0%"),
+                "prev_day_high": stock.get("prev_day_high", 0),
+                "current_price": stock.get("current_price", 0),
+                "diff_percent": stock.get("diff_percent", 0),
                 "volume": stock.get("volume", "0"),
             }
 

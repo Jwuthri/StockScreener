@@ -358,8 +358,8 @@ class AlpacaService:
             multisymbol_request_params = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
             quote = self.trading_client.get_stock_latest_quote(multisymbol_request_params)
             return quote[symbol].ask_price
-        except Exception as e:
-            logger.error(f"Error getting current price for {symbol}: {str(e)}")
+        except Exception:
+            # logger.error(f"Error getting current price for {symbol}: {str(e)}")
             raise
 
 

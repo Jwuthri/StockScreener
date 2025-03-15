@@ -272,4 +272,4 @@ def run_daily_update(date: str = None):
 
 
 if __name__ == "__main__":
-    run_daily_update(date="2025-03-11")
+    run_daily_update(date=None)
