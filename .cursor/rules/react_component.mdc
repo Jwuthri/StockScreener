@@ -1,0 +1,10 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+{
+    "name": "React Components",
+    "description": "React components should be functional components with hooks",
+    "pattern": "frontend/src/components/**/*.{js,jsx,ts,tsx}"
+},

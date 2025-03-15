@@ -1,0 +1,26 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Security practices for the application
+globs:
+alwaysApply: true
+---
+{
+    "name": "Security Practices",
+    "description": "Guidelines for implementing security in the application",
+    "pattern": "**/*",
+    "rules": [
+        "Sanitize all user inputs",
+        "Implement proper authentication and authorization",
+        "Use environment variables for sensitive information",
+        "Rate limit API endpoints",
+        "Validate and sanitize all data from external sources",
+        "Use bcrypt for password hashing",
+        "Implement CORS protection",
+        "Use HTTPS for all communications",
+        "Implement proper session management"
+    ]
+}

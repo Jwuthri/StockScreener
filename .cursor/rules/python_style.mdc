@@ -1,0 +1,18 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ {
+    "name": "Python Style",
+    "description": "Python code should follow PEP 8 guidelines, use type hints, and include docstrings",
+    "pattern": "backend/**/*.py",
+    "rules": [
+        "Use type hints for all function parameters and return values",
+        "Document functions with docstrings",
+        "Use async/await for I/O bound operations",
+        "Follow PEP 8 guidelines",
+        "Use 4-space indentation",
+        "Maximum line length of 100 characters"
+    ]
+}

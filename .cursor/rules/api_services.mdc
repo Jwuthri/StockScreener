@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Rules for API services in the frontend
+globs:
+alwaysApply: true
+---
+{
+    "name": "API Services",
+    "description": "Guidelines for implementing API services in the frontend",
+    "pattern": "frontend/src/services/**/*.{js,jsx,ts,tsx}",
+    "rules": [
+        "Use axios for API requests",
+        "Implement proper error handling",
+        "Use environment variables for API URLs",
+        "Create reusable service functions",
+        "Handle authentication tokens",
+        "Implement request interceptors for common headers",
+        "Use async/await for API calls",
+        "Include proper TypeScript types for responses"
+    ]
+}

@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Rules for React pages
+globs:
+alwaysApply: true
+---
+{
+    "name": "React Pages",
+    "description": "Guidelines for implementing React pages",
+    "pattern": "frontend/src/pages/**/*.{js,jsx,ts,tsx}",
+    "rules": [
+        "Use functional components with hooks",
+        "Implement responsive layouts",
+        "Handle data fetching with useEffect",
+        "Implement proper loading states",
+        "Handle errors gracefully",
+        "Use Material UI components and theme",
+        "Implement proper routing with react-router-dom",
+        "Separate business logic from UI components"
+    ]
+}

@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+---
+description: Rules for FastAPI routes
+globs:
+alwaysApply: true
+---
+{
+    "name": "FastAPI Routes",
+    "description": "Guidelines for implementing FastAPI routes",
+    "pattern": "backend/api/**/*.py",
+    "rules": [
+        "Use appropriate HTTP methods (GET, POST, PUT, DELETE)",
+        "Include response_model for all endpoints",
+        "Implement proper error handling",
+        "Use dependency injection for database sessions",
+        "Include status codes for responses",
+        "Document API endpoints with docstrings",
+        "Validate request bodies with Pydantic models",
+        "Use async functions for all route handlers"
+    ]
+}

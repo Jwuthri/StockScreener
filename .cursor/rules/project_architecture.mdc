@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Overall project architecture guidelines
+globs:
+alwaysApply: true
+---
+{
+    "name": "Project Architecture",
+    "description": "Guidelines for the overall project architecture",
+    "pattern": "**/*",
+    "rules": [
+        "Backend: FastAPI with SQLAlchemy ORM",
+        "Frontend: React with Material UI",
+        "Database: SQLite for development, PostgreSQL for production",
+        "API: RESTful endpoints with WebSocket for real-time updates",
+        "Organize code by feature and responsibility",
+        "Separate business logic from presentation layer",
+        "Use environment variables for configuration",
+        "Implement proper error handling and logging"
+    ]
+}

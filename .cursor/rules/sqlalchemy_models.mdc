@@ -1,0 +1,19 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ {
+    "name": "SQLAlchemy Models",
+    "description": "Rules for defining and using SQLAlchemy models",
+    "pattern": "backend/models/**/*.py",
+    "rules": [
+        "Define models as classes inheriting from Base",
+        "Use appropriate SQLAlchemy column types",
+        "Include relationships between models",
+        "Define __tablename__ for each model",
+        "Include created_at timestamp for all models",
+        "Use ForeignKey for relationships",
+        "Define indexes for frequently queried columns"
+    ]
+}

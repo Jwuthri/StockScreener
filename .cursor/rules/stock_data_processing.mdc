@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Rules for stock data processing
+globs:
+alwaysApply: true
+---
+{
+    "name": "Stock Data Processing",
+    "description": "Guidelines for processing stock data",
+    "pattern": "backend/services/**/*.py",
+    "rules": [
+        "Use numpy and pandas for data processing",
+        "Implement proper error handling for API failures",
+        "Cache frequently accessed data",
+        "Use appropriate data structures for performance",
+        "Validate all incoming stock data",
+        "Implement async functions for external API calls",
+        "Use proper typing for data structures",
+        "Document complex algorithms with comments"
+    ]
+}

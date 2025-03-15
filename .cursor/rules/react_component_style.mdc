@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Style rules for React components
+globs:
+alwaysApply: true
+---
+{
+    "name": "React Component Style",
+    "description": "Style guidelines for React components",
+    "pattern": "frontend/src/components/**/*.{js,jsx,ts,tsx}",
+    "rules": [
+        "Use functional components with hooks",
+        "Use 2-space indentation",
+        "Destructure props in function parameters",
+        "Use named exports for components",
+        "Keep components focused on a single responsibility",
+        "Use Material UI components for UI elements",
+        "Handle loading and error states",
+        "Use proper prop types or TypeScript interfaces"
+    ]
+}

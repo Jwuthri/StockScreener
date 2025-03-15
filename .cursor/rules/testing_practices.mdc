@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+ ---
+description: Testing practices for the application
+globs:
+alwaysApply: true
+---
+{
+    "name": "Testing Practices",
+    "description": "Guidelines for implementing tests in the application",
+    "pattern": "**/*.{py,js,jsx,ts,tsx}",
+    "rules": [
+        "Write unit tests for backend services",
+        "Write component tests for React components",
+        "Test edge cases for stock data processing",
+        "Mock external API calls in tests",
+        "Use pytest for Python tests",
+        "Use Jest for JavaScript tests",
+        "Implement test coverage reporting",
+        "Write integration tests for critical paths"
+    ]
+}
