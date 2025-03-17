@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from backend.services.alpaca_service import AlpacaService
+from backend.services.alpaca_service_paper import AlpacaPaperService
 from backend.services.stock_screener_service import StockScreenerService
 from backend.services.tradingview_service import get_stock_price_tv
 
@@ -10,8 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class TradingStrategyService:
-    def __init__(self):
-        self.alpaca = AlpacaService()
+    def __init__(self, paper: bool = False):
+        if paper:
+            self.alpaca = AlpacaPaperService()
+        else:
+            self.alpaca = AlpacaService()
         self.screener = StockScreenerService()
         self.active_strategies = {}
         now = datetime.now()
@@ -611,12 +615,12 @@ class TradingStrategyService:
 
             # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
             now = datetime.now()
-            market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
-                tzinfo=timezone(timedelta(hours=-8))
-            )  # PST timezone
+            # Use consistent timezone (PST/PDT)
+            tz = timezone(timedelta(hours=-8))  # PST
+            market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(tzinfo=tz)
 
             five_min_after_open = market_open_time + timedelta(minutes=5)
-            current_time = datetime.now(timezone(timedelta(hours=-8)))
+            current_time = datetime.now().replace(tzinfo=tz)  # Use same timezone
 
             if current_time < five_min_after_open:
                 wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
@@ -650,7 +654,7 @@ class TradingStrategyService:
             positions_taken = 0
             monitoring_tasks = []
 
-            for stock in new_opportunities[:10]:
+            for stock in new_opportunities[:max_new_positions]:
                 symbol = stock["symbol"]
                 current_price = float(stock["current_price"])
                 prev_day_high = float(stock["prev_day_high"])
@@ -690,7 +694,7 @@ class TradingStrategyService:
 
 
 if __name__ == "__main__":
-    x = TradingStrategyService()
+    x = TradingStrategyService(True)
     res = asyncio.run(
         x.execute_open_below_prev_high_strategy(
             params={

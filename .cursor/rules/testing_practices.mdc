@@ -1,9 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: true
----
- ---
 description: Testing practices for the application
 globs:
 alwaysApply: true

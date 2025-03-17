@@ -1,9 +1,9 @@
 ---
-description:
+description: Rules for SQLAlchemy models
 globs:
 alwaysApply: true
 ---
- {
+{
     "name": "SQLAlchemy Models",
     "description": "Rules for defining and using SQLAlchemy models",
     "pattern": "backend/models/**/*.py",

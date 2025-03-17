@@ -1,9 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: true
----
- ---
 description: Rules for stock data processing
 globs:
 alwaysApply: true

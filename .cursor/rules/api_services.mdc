@@ -1,9 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: true
----
- ---
 description: Rules for API services in the frontend
 globs:
 alwaysApply: true

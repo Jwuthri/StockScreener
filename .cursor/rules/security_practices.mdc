@@ -1,9 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: true
----
- ---
 description: Security practices for the application
 globs:
 alwaysApply: true

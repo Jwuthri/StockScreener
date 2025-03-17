@@ -1,9 +1,9 @@
 ---
-description:
+description: Python code style rules for the backend
 globs:
 alwaysApply: true
 ---
- {
+{
     "name": "Python Style",
     "description": "Python code should follow PEP 8 guidelines, use type hints, and include docstrings",
     "pattern": "backend/**/*.py",

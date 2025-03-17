@@ -1,9 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: true
----
- ---
 description: Style rules for React components
 globs:
 alwaysApply: true

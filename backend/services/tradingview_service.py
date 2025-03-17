@@ -2036,7 +2036,12 @@ def get_stocks_with_open_below_prev_day_high(
             logger.info("No more stocks found in this batch, stopping")
             return []
 
-        prev_day = (datetime.now() - timedelta(days=1)).strftime("%Y/%m/%d")
+        prev_day = datetime.now() - timedelta(days=1)
+        if prev_day.weekday() >= 5:  # Saturday or Sunday
+            prev_day = datetime.now() - timedelta(days=3)  # Go back to Friday
+
+        prev_day = prev_day.strftime("%Y/%m/%d")
+
         previous_day_data = (
             db_session()
             .query(PriceHistory, Stock)
