@@ -21,6 +21,7 @@ from backend.services.tradingview_service import (
     get_stock_chart_data,
     get_stock_details_tv,
     get_stocks_crossing_prev_day_high,
+    get_stocks_first_candle_near_prev_high,
     get_stocks_with_consecutive_negative_candles,
     get_stocks_with_consecutive_positive_candles,
     get_stocks_with_filters,
@@ -687,3 +688,42 @@ async def get_sectors():
     except Exception as e:
         logger.error(f"Failed to fetch sectors: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch sectors: {str(e)}")
+
+
+@router.get("/screener/first-candle-near-prev-high")
+async def get_stocks_first_candle_near_prev_high_endpoint(
+    limit: int = Query(1000, ge=1, le=10000, description="Maximum number of stocks to return"),
+    min_price: float = Query(0.1, description="Minimum stock price"),
+    max_price: float = Query(20.0, description="Maximum stock price"),
+    min_volume: int = Query(200_000, description="Minimum volume filter"),
+    max_above_percent: float = Query(5.0, description="Maximum percentage above previous day high"),
+):
+    """
+    Get stocks where the first 1-minute candle is either below previous day's high
+    or above it by no more than the specified percentage.
+    """
+    try:
+        logger.info("Screening for stocks with first candle near previous day high...")
+
+        stocks = await get_stocks_first_candle_near_prev_high(
+            limit=limit,
+            min_price=min_price,
+            max_price=max_price,
+            min_volume=min_volume,
+            max_above_percent=max_above_percent,
+        )
+
+        return {
+            "stocks": stocks,
+            "count": len(stocks),
+            "parameters": {
+                "min_price": min_price,
+                "max_price": max_price,
+                "min_volume": min_volume,
+                "max_above_percent": max_above_percent,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error screening for stocks with first candle near previous day high: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error screening for stocks: {str(e)}")

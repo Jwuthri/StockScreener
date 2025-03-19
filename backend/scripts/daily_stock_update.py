@@ -67,6 +67,8 @@ def save_stocks_to_db(stocks):
     logger.info(f"Saving {len(stocks)} stocks to database")
 
     db = db_session()
+    dt = datetime.now().strftime("%Y/%m/%d")
+    # dt = "2025/03/18"
     try:
         count = 0
         for _, stock_data in tqdm(stocks.iterrows(), desc="Saving stocks to database"):
@@ -136,7 +138,7 @@ def save_stocks_to_db(stocks):
                         low=low,
                         close=price,
                         volume=safe_volume,
-                        date=datetime.now().strftime("%Y/%m/%d"),
+                        date=dt,
                     )
                     db.add(price_history)
                     logger.info(f"Added price history for {symbol}")

@@ -37,6 +37,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.now)
     # Relationships
     alerts = relationship("Alert", back_populates="user")
+    taken_trades = relationship("TakenTrade", back_populates="user")
 
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -61,6 +62,7 @@ class Stock(Base):
     # Relationships
     alerts = relationship("Alert", back_populates="stock")
     price_history = relationship("PriceHistory", back_populates="stock")
+    taken_trades = relationship("TakenTrade", back_populates="stock")
 
 
 class Alert(Base):
@@ -98,6 +100,38 @@ class PriceHistory(Base):
 
     # Relationships
     stock = relationship("Stock", back_populates="price_history")
+
+
+class TakenTrade(Base):
+    __tablename__ = "taken_trades"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    # Trade details
+    strategy_name = Column(String)  # Name of the strategy that took the trade
+    entry_timestamp = Column(DateTime)  # When the trade was taken
+    entry_price = Column(Float)  # Price at which we entered
+    prev_day_high = Column(Float)  # Previous day's high price
+    target_price = Column(Float)  # Target price that triggered the trade
+    shares = Column(Integer)  # Number of shares bought
+    total_cost = Column(Float)  # Total cost of the position
+    position_size_percentage = Column(Float)  # Percentage of account used
+
+    # Trade status
+    is_open = Column(Boolean, default=True)  # Whether the trade is still open
+    exit_timestamp = Column(DateTime, nullable=True)  # When we exited the trade
+    exit_price = Column(Float, nullable=True)  # Price at which we exited
+    profit_loss = Column(Float, nullable=True)  # Realized P/L
+    profit_loss_percentage = Column(Float, nullable=True)  # Realized P/L as percentage
+
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
+
+    # Relationships
+    stock = relationship("Stock", back_populates="taken_trades")
+    user = relationship("User", back_populates="taken_trades")
 
 
 # Get a DB session

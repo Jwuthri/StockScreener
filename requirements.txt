@@ -34,3 +34,4 @@ yfinance==0.2.54
 pydantic[email]
 tradingview-screener
 rookiepy
+websockets>=11.0.3

@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 
+import requests
 from alpaca.data import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest
 from alpaca.trading.client import TradingClient
@@ -362,9 +363,23 @@ class AlpacaService:
             # logger.error(f"Error getting current price for {symbol}: {str(e)}")
             raise
 
+    def latest_quotes(self, symbols: list[str]):
+        url = f"https://data.alpaca.markets/v2/stocks/quotes/latest?symbols={','.join(symbols)}"
+        headers = {
+            "accept": "application/json",
+            "APCA-API-KEY-ID": self.api_key,
+            "APCA-API-SECRET-KEY": self.api_secret,
+        }
+        response = requests.get(url, headers=headers)
+
+        return response.json()
+
 
 if __name__ == "__main__":
-    pass
+    serv = AlpacaService()
+    res = serv.latest_quotes(["NVDA", "SPY"])
+    print(res)
+    breakpoint()
     # api_key = os.environ.get("ALPACA_API_KEY")
     # api_secret = os.environ.get("ALPACA_API_SECRET")
     # # keys required

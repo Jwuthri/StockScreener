@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from backend.models.database import SessionLocal, Stock, TakenTrade
 from backend.services.alpaca_service import AlpacaService
 from backend.services.alpaca_service_paper import AlpacaPaperService
 from backend.services.stock_screener_service import StockScreenerService
@@ -17,8 +18,11 @@ class TradingStrategyService:
         else:
             self.alpaca = AlpacaService()
         self.screener = StockScreenerService()
+        # self.websocket = AlpacaWebSocketService(paper=paper)
         self.active_strategies = {}
+        self.price_monitors = {}
         now = datetime.now()
+        self.db = SessionLocal()
         # Market hours: 6:30 AM - 1:00 PM PST
         self.market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(
             tzinfo=timezone(timedelta(hours=-8))
@@ -35,6 +39,101 @@ class TradingStrategyService:
         buying_power = float(account_info["buying_power"])
         risk_amount = buying_power * (risk_percentage / 100)
         return risk_amount / (stop_loss_percentage / 100)
+
+    async def _monitor_and_trade_stock_base(self, symbol, target_price, shares, position_size):
+        """
+        Monitor a stock and buy when price crosses above the previous day's high
+        (previous check below, current check above), then sell 5 minutes after each entry.
+
+        Args:
+            symbol: Stock symbol
+            target_price: Price threshold (prev day high)
+            shares: Number of shares to buy
+            position_size: Dollar amount to invest
+        """
+        try:
+            logger.info(f"Monitoring {symbol} for crosses above ${target_price}")
+
+            # Track when we're in a position to avoid multiple entries at once
+            in_position = False
+            # Track last price to detect crosses
+            last_price = None
+            # Track active trades
+            active_trades = []
+            # Track trades made today
+            trades_today = 0
+            max_trades_per_day = 5  # Limit trades per day per stock
+
+            # Monitor the stock price until market close
+            while True:
+                # Check if we're still in market hours
+                now = datetime.now()
+                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))  # Convert to PST
+                if current_time > self.market_close_time:
+                    logger.info(f"Market closed, ending monitoring for {symbol}")
+                    break
+
+                # Check if we've reached max trades for today
+                if trades_today >= max_trades_per_day:
+                    logger.info(f"Reached maximum trades for {symbol} today")
+                    break
+
+                try:
+                    current_price = await self.alpaca.get_current_price(symbol)
+                except Exception:
+                    current_price = get_stock_price_tv(symbol)["price"]
+
+                # Detect crossing above target price (previous check below, current check above)
+                if (
+                    last_price is not None
+                    and last_price < target_price
+                    and current_price >= target_price
+                    and not in_position
+                ):
+                    # Price has crossed above target
+                    logger.info(f"{symbol} crossed above target price of ${target_price}")
+
+                    # Place market buy order
+                    account_info = self.alpaca.get_account_info()
+                    buying_power = float(account_info["buying_power"])
+                    if buying_power < position_size:
+                        logger.info(f"Not enough buying power to purchase {symbol}")
+                        return
+                    order = self.alpaca.place_market_order(symbol, shares, "buy")
+                    logger.info(f"Bought {shares} shares of {symbol} at ${current_price}")
+
+                    # Mark that we're in a position
+                    in_position = True
+                    trades_today += 1
+
+                    # Create a task to sell after 5 minutes
+                    sell_task = asyncio.create_task(
+                        self._sell_after_delay(symbol, shares, current_price, 300)  # 5 minutes in seconds
+                    )
+
+                    # Add callback to update position status when sell completes
+                    sell_task.add_done_callback(lambda _: self._position_closed_callback(symbol))
+
+                    active_trades.append(sell_task)
+
+                # Update last price
+                last_price = current_price
+
+                # Wait for next price update
+                await asyncio.sleep(5)  # Check price every 5 seconds
+
+            # Wait for any remaining active trades to complete
+            if active_trades:
+                await asyncio.gather(*active_trades)
+
+            return {
+                "success": True,
+                "message": f"Successfully monitored {symbol} for the trading day",
+            }
+
+        except Exception as e:
+            logger.error(f"Error monitoring and trading {symbol}: {str(e)}")
+            return {"success": False, "message": str(e)}
 
     def has_enough_buying_power(self, position_size_percentage, stop_loss_percentage):
         return self.calculate_position_size(position_size_percentage, stop_loss_percentage) > 0
@@ -224,94 +323,131 @@ class TradingStrategyService:
             return {"success": False, "message": f"Error executing strategy: {str(e)}", "positions_taken": 0}
 
     async def _monitor_and_trade_stock(self, symbol, target_price, shares, position_size):
-        """
-        Monitor a stock and buy when price crosses above the previous day's high
-        (previous check below, current check above), then sell 5 minutes after each entry.
-
-        Args:
-            symbol: Stock symbol
-            target_price: Price threshold (prev day high)
-            shares: Number of shares to buy
-            position_size: Dollar amount to invest
-        """
+        """Monitor a stock using WebSocket and buy when price crosses above the target price"""
         try:
             logger.info(f"Monitoring {symbol} for crosses above ${target_price}")
 
             # Track when we're in a position to avoid multiple entries at once
             in_position = False
-            # Track last price to detect crosses
             last_price = None
-            # Track active trades
-            active_trades = []
-            # Track trades made today
             trades_today = 0
-            max_trades_per_day = 5  # Limit trades per day per stock
+            max_trades_per_day = 5
 
-            # Monitor the stock price until market close
-            while True:
+            # Track how long price has been above/below target
+            was_below_target = False  # Initialize as False until we confirm it's below
+            last_cross_time = None
+
+            # Create an event to signal when we should stop monitoring
+            stop_event = asyncio.Event()
+            self.price_monitors[symbol] = stop_event
+
+            # Get stock from database
+            stock = self.db.query(Stock).filter(Stock.symbol == symbol).first()
+            if not stock:
+                # Create stock record if it doesn't exist
+                stock = Stock(symbol=symbol)
+                self.db.add(stock)
+                self.db.commit()
+                self.db.refresh(stock)
+
+            # Define the callback for price updates
+            async def price_callback(price_data):
+                nonlocal in_position, last_price, trades_today, was_below_target, last_cross_time
+
+                current_price = price_data["price"]
+                logger.info(f"Price callback for {symbol}, current price: {current_price}")
+                if current_price is None:
+                    return
+
+                # Log price updates for debugging
+                logger.debug(
+                    f"{symbol} price update: ${current_price} (Target: ${target_price}, Was Below: {was_below_target})"
+                )
+
                 # Check if we're still in market hours
                 now = datetime.now()
-                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))  # Convert to PST
+                current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))
                 if current_time > self.market_close_time:
                     logger.info(f"Market closed, ending monitoring for {symbol}")
-                    break
+                    stop_event.set()
+                    return
 
                 # Check if we've reached max trades for today
                 if trades_today >= max_trades_per_day:
                     logger.info(f"Reached maximum trades for {symbol} today")
-                    break
+                    stop_event.set()
+                    return
 
-                try:
-                    current_price = await self.alpaca.get_current_price(symbol)
-                except Exception:
-                    current_price = get_stock_price_tv(symbol)["price"]
+                # Update price tracking
+                if current_price < target_price:
+                    # Price is below target
+                    was_below_target = True
+                    last_cross_time = None  # Reset cross time when price goes below target
+                    logger.debug(f"{symbol} price below target (${current_price} < ${target_price})")
+                elif current_price >= target_price and was_below_target and not in_position:
+                    # Price has just crossed above target from being below
+                    current_time = datetime.now()
 
-                logger.info(
-                    f"Current price for {symbol}: ${current_price}, target price: ${target_price}, last price: ${last_price}"
-                )
+                    # Check if this is a new cross (not within last 5 minutes)
+                    if last_cross_time is None or (current_time - last_cross_time).total_seconds() > 300:
+                        logger.critical(
+                            f"{symbol} crossed above target price of ${target_price} (Current: ${current_price})"
+                        )
 
-                # Detect crossing above target price (previous check below, current check above)
-                if (
-                    last_price is not None
-                    and last_price < target_price
-                    and current_price >= target_price
-                    and not in_position
-                ):
-                    # Price has crossed above target
-                    logger.critical(f"{symbol} crossed above target price of ${target_price}")
-                    account_info = self.alpaca.get_account_info()
-                    buying_power = float(account_info["buying_power"])
-                    if buying_power < position_size:
-                        logger.info(f"Not enough buying power to purchase {symbol}")
-                        continue
+                        # Verify buying power
+                        account_info = self.alpaca.get_account_info()
+                        buying_power = float(account_info["buying_power"])
+                        if buying_power < position_size:
+                            logger.info(f"Not enough buying power to purchase {symbol}")
+                            return
 
-                    # Place market buy order
-                    order = self.alpaca.place_market_order(symbol, shares, "buy")
-                    logger.critical(f"Bought {shares} shares of {symbol} at ${current_price}")
+                        # Place market buy order
+                        order = self.alpaca.place_market_order(symbol, shares, "buy")
+                        logger.critical(f"Bought {shares} shares of {symbol} at ${current_price}")
 
-                    # Mark that we're in a position
-                    in_position = True
-                    trades_today += 1
+                        # Record the trade in database
+                        try:
+                            taken_trade = TakenTrade(
+                                stock_id=stock.id,
+                                user_id=1,  # Assuming admin user for now
+                                strategy_name="open_below_prev_high",
+                                entry_timestamp=current_time,
+                                entry_price=current_price,
+                                prev_day_high=target_price / 1.0005,  # Remove the 0.05% buffer
+                                target_price=target_price,
+                                shares=shares,
+                                total_cost=current_price * shares,
+                                position_size_percentage=position_size / buying_power * 100,
+                                is_open=True,
+                            )
+                            self.db.add(taken_trade)
+                            self.db.commit()
+                            logger.info(f"Recorded trade in database for {symbol}")
+                        except Exception as e:
+                            logger.error(f"Error recording trade in database: {str(e)}")
 
-                    # Create a task to sell after 5 minutes
-                    sell_task = asyncio.create_task(
-                        self._sell_after_delay(symbol, shares, current_price, 300)  # 5 minutes in seconds
-                    )
+                        # Update tracking
+                        in_position = True
+                        trades_today += 1
+                        last_cross_time = current_time
+                        was_below_target = False  # Reset for next potential trade
 
-                    # Add callback to update position status when sell completes
-                    sell_task.add_done_callback(lambda _: self._position_closed_callback(symbol))
-
-                    active_trades.append(sell_task)
+                        # Create a task to sell after 5 minutes
+                        asyncio.create_task(self._sell_after_delay(symbol, shares, current_price, 300))
+                    else:
+                        logger.debug(f"{symbol} crossed target but within cooldown period")
 
                 # Update last price
                 last_price = current_price
 
-                # Wait for next price update
-                await asyncio.sleep(5)  # Check price every 5 seconds
+            # Subscribe to price updates
+            await self.websocket.subscribe_to_trades([symbol], price_callback)
 
-            # Wait for any remaining active trades to complete
-            if active_trades:
-                await asyncio.gather(*active_trades)
+            # Wait until stop event is set
+            await stop_event.wait()
+
+            # Unsubscribe from price updates
+            await self.websocket.unsubscribe_from_trades([symbol])
 
             return {
                 "success": True,
@@ -321,6 +457,11 @@ class TradingStrategyService:
         except Exception as e:
             logger.error(f"Error monitoring and trading {symbol}: {str(e)}")
             return {"success": False, "message": str(e)}
+        finally:
+            # Ensure we clean up the monitor
+            if symbol in self.price_monitors:
+                self.price_monitors[symbol].set()
+                self.price_monitors.pop(symbol, None)
 
     def _position_closed_callback(self, symbol):
         """Callback function when a position is closed"""
@@ -353,6 +494,28 @@ class TradingStrategyService:
 
             profit_loss = (current_price - entry_price) * shares
             profit_loss_percent = ((current_price / entry_price) - 1) * 100
+
+            # Update the trade record in database
+            try:
+                # Get the most recent open trade for this symbol
+                trade = (
+                    self.db.query(TakenTrade)
+                    .join(Stock)
+                    .filter(Stock.symbol == symbol, TakenTrade.is_open == True)
+                    .order_by(TakenTrade.entry_timestamp.desc())
+                    .first()
+                )
+
+                if trade:
+                    trade.is_open = False
+                    trade.exit_timestamp = datetime.now()
+                    trade.exit_price = current_price
+                    trade.profit_loss = profit_loss
+                    trade.profit_loss_percentage = profit_loss_percent
+                    self.db.commit()
+                    logger.info(f"Updated trade record with exit details for {symbol}")
+            except Exception as e:
+                logger.error(f"Error updating trade record: {str(e)}")
 
             logger.info(
                 f"Sold {shares} shares of {symbol} after {delay_seconds/60}-minute hold. "
@@ -578,30 +741,22 @@ class TradingStrategyService:
             return {"success": False, "message": f"Error during backtest: {str(e)}"}
 
     async def execute_open_below_prev_high_strategy(self, params):
-        """
-        Strategy that buys stocks that opened below previous day's high
-
-        Modified strategy flow:
-        1. After first 5 minutes of market open, scan for stocks meeting parameters
-        2. For each stock, monitor until price reaches previous day's high + 0.5%
-        3. Buy the stock when target price is reached
-        4. Hold for exactly 5 minutes, then sell
-
-        params:
-        - max_positions: Maximum number of positions to take
-        - position_size_percentage: Percentage of buying power to use per position
-        - min_price: Minimum stock price
-        - max_price: Maximum stock price
-        - min_volume: Minimum volume
-        - min_diff_percent: Minimum percentage below previous high
-        - max_diff_percent: Maximum percentage below previous high
-        """
         try:
             logger.info("Executing open below prev high strategy")
+
             # Get current positions
+            logger.info("Getting current positions...")
             current_symbols = [p["symbol"] for p in self.current_positions]
+            logger.info(f"Current positions: {current_symbols}")
+
+            # Connect to WebSocket once for all symbols
+            logger.info("Connecting to WebSocket...")
+            # if not self.websocket.connected:
+            #     await self.websocket.connect()
+            logger.info("WebSocket connected successfully")
 
             # Get stocks that opened below previous day's high
+            logger.info("Getting stocks that opened below previous day's high...")
             screener_params = {
                 "min_price": params.get("min_price", 1),
                 "max_price": params.get("max_price", 20),
@@ -612,30 +767,37 @@ class TradingStrategyService:
                 "max_change_percent": params.get("max_change_percent", 100),
                 "limit": params.get("limit", 1000),
             }
+            logger.info(f"Screener parameters: {screener_params}")
 
-            # Wait until 5 minutes after market open (6:30 AM PST + 5 minutes)
+            # Wait until 5 minutes after market open
             now = datetime.now()
-            # Use consistent timezone (PST/PDT)
-            tz = timezone(timedelta(hours=-8))  # PST
+            tz = timezone(timedelta(hours=-8))
             market_open_time = datetime(now.year, now.month, now.day, hour=6, minute=30, second=0).replace(tzinfo=tz)
-
-            five_min_after_open = market_open_time + timedelta(minutes=5)
-            current_time = datetime.now().replace(tzinfo=tz)  # Use same timezone
+            five_min_after_open = market_open_time + timedelta(minutes=2)
+            current_time = datetime.now().replace(tzinfo=tz)
 
             if current_time < five_min_after_open:
-                wait_seconds = (five_min_after_open - current_time).total_seconds() - 10
+                wait_seconds = (five_min_after_open - current_time).total_seconds()
                 logger.info(f"Waiting {wait_seconds} seconds until 5 minutes after market open")
                 await asyncio.sleep(wait_seconds)
+            logger.info("Market open wait complete")
 
             # Get stocks that opened below previous day's high
+            logger.info("Fetching stocks from screener...")
             stocks = await self.screener.get_stocks_open_below_prev_high(screener_params)
+            # breakpoint()
+            logger.info(f"Found {len(stocks)} stocks from screener")
+
             processed_stocks = self.screener.process_screener_results(stocks, params.get("max_positions", 1000))
+            logger.info(f"Processed {len(processed_stocks)} stocks after filtering")
 
             # Filter out stocks we already have positions in
             new_opportunities = [stock for stock in processed_stocks if stock["symbol"] not in current_symbols]
+            logger.info(f"Found {len(new_opportunities)} new opportunities after filtering existing positions")
 
             # Calculate how many new positions we can take
             max_new_positions = params.get("max_positions", 10000) - len(self.alpaca.get_positions())
+            logger.info(f"Can take up to {max_new_positions} new positions")
 
             if max_new_positions <= 0:
                 logger.info("Maximum positions reached, not taking new trades")
@@ -650,37 +812,87 @@ class TradingStrategyService:
                 symbol = stock["symbol"]
                 self.active_strategies[symbol] = False
 
-            # Take positions in new opportunities
-            positions_taken = 0
-            monitoring_tasks = []
+            # Create a list to store all monitoring tasks
+            all_monitoring_tasks = []
 
-            for stock in new_opportunities[:max_new_positions]:
-                symbol = stock["symbol"]
-                current_price = float(stock["current_price"])
-                prev_day_high = float(stock["prev_day_high"])
+            # Create monitoring tasks in batches to avoid rate limits
+            batch_size = 10
+            logger.info(f"Processing stocks in batches of {batch_size}")
 
-                # Calculate target price (previous day's high + 0.5%)
-                target_price = prev_day_high * 1.0005
+            for i in range(0, len(new_opportunities[:max_new_positions]), batch_size):
+                batch = new_opportunities[i : i + batch_size]
+                batch_tasks = []
+                logger.info(f"Processing batch {i//batch_size + 1} with {len(batch)} stocks")
 
-                # Calculate position size
-                position_size = self.calculate_position_size(params.get("position_size_percentage", 10), 100)
+                for stock in batch:
+                    symbol = stock["symbol"]
+                    current_price = float(stock["current_price"])
+                    prev_day_high = float(stock["prev_day_high"])
+                    target_price = prev_day_high * 1.0005
+                    position_size = self.calculate_position_size(params.get("position_size_percentage", 10), 100)
+                    shares = int(position_size / target_price)
 
-                # Calculate number of shares
-                shares = int(position_size / target_price)
+                    if shares < 1:
+                        logger.info(f"Not enough buying power to purchase {symbol}")
+                        continue
 
-                if shares < 1:
-                    logger.info(f"Not enough buying power to purchase {symbol}")
-                    continue
+                    logger.info(
+                        f"Starting monitor for {symbol} - Current: ${current_price:.2f}, Target: ${target_price:.2f}, Shares: {shares}"
+                    )
+                    task = asyncio.create_task(
+                        self._monitor_and_trade_stock_base(symbol, target_price, shares, position_size)
+                    )
+                    batch_tasks.append(task)
+                    all_monitoring_tasks.append(task)
 
-                # Create a task to monitor this stock
-                logger.info(f"Monitoring {symbol} for crosses above ${target_price}")
-                task = asyncio.create_task(self._monitor_and_trade_stock(symbol, target_price, shares, position_size))
-                monitoring_tasks.append(task)
+                if batch_tasks:
+                    logger.info("Waiting 1 second between batches to avoid rate limits")
+                    await asyncio.sleep(1)
 
-            # Wait for all monitoring tasks to complete
-            if monitoring_tasks:
-                results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
-                positions_taken = sum(1 for r in results if isinstance(r, dict) and r.get("success", False))
+            if all_monitoring_tasks:
+                logger.info(f"Monitoring {len(all_monitoring_tasks)} symbols for trading opportunities")
+
+                # Create a task to monitor market close
+                async def check_market_close():
+                    while True:
+                        now = datetime.now()
+                        current_time = now.replace(tzinfo=timezone(timedelta(hours=-8)))
+                        if current_time > self.market_close_time:
+                            logger.info("Market closed, stopping all monitors")
+                            # Stop all monitors
+                            for symbol in list(self.price_monitors.keys()):
+                                if symbol in self.price_monitors:
+                                    self.price_monitors[symbol].set()
+                            break
+                        await asyncio.sleep(60)  # Check every minute
+
+                market_close_task = asyncio.create_task(check_market_close())
+
+                # Wait for all monitoring tasks or market close
+                try:
+                    logger.info("Waiting for monitoring tasks to complete...")
+                    # Wait for all tasks to complete
+                    results = await asyncio.gather(*all_monitoring_tasks, return_exceptions=True)
+
+                    # Count successful positions
+                    positions_taken = sum(
+                        1
+                        for r in results
+                        if not isinstance(r, Exception) and isinstance(r, dict) and r.get("success", False)
+                    )
+                    logger.info(f"Monitoring complete. Took {positions_taken} positions.")
+                finally:
+                    # Cancel market close checker if it's still running
+                    if not market_close_task.done():
+                        market_close_task.cancel()
+                        try:
+                            await market_close_task
+                        except asyncio.CancelledError:
+                            pass
+
+            else:
+                positions_taken = 0
+                logger.info("No stocks to monitor")
 
             return {
                 "success": True,
@@ -691,23 +903,31 @@ class TradingStrategyService:
         except Exception as e:
             logger.error(f"Error executing open below prev high strategy: {str(e)}")
             return {"success": False, "message": f"Error executing strategy: {str(e)}", "positions_taken": 0}
+        finally:
+            # Cleanup any remaining monitors
+            for symbol in list(self.price_monitors.keys()):
+                if symbol in self.price_monitors:
+                    self.price_monitors[symbol].set()
+            self.price_monitors.clear()
 
 
 if __name__ == "__main__":
-    x = TradingStrategyService(True)
+    x = TradingStrategyService(False)
+    res = asyncio.run(x.alpaca.get_current_price("NVDA"))
+    breakpoint()
     res = asyncio.run(
         x.execute_open_below_prev_high_strategy(
             params={
-                "min_price": 1,
-                "max_price": 10,
-                "min_volume": 333_000,
-                "min_diff_percent": 1,
+                "min_price": 0.1,
+                "max_price": 8,
+                "min_volume": 200_000,
+                "min_diff_percent": 2,
                 "max_diff_percent": 1000,
-                "min_change_percent": 1,
+                "min_change_percent": -10,
                 "max_change_percent": 1000,
-                "limit": 500,
+                "limit": 100,
                 "max_positions": 1000,
-                "position_size_percentage": 1,
+                "position_size_percentage": 0.01,
             }
         )
     )
