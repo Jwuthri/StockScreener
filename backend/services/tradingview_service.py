@@ -2135,9 +2135,6 @@ def get_stocks_with_open_below_prev_day_high(
                     except (TypeError, ValueError):
                         change_percent = None
                         continue
-
-                    # if symbol == "HMR":
-                    #     breakpoint()
                     if min_change_percent > change_percent or change_percent > max_change_percent:
                         continue
 

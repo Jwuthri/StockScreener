@@ -616,6 +616,7 @@ class TradingStrategyService:
             stocks_to_monitor = []
             for stock in processed_stocks:
                 symbol = stock["symbol"]
+                # breakpoint()
                 current_high_price = float(stock["open_high"])
                 target_price = current_high_price * 1.0005  # Add 0.05% buffer
                 position_size = self.calculate_position_size(params.get("position_size_percentage", 10), 100)
@@ -631,14 +632,16 @@ class TradingStrategyService:
                         "target_price": target_price,
                         "shares": shares,
                         "position_size": position_size,
-                        "hold_time": 900,
+                        "hold_time": 600,
+                        "strategy_name": "execute_first_candle_breakout_strategy",
                     }
                 )
 
             # Modify the monitoring state initialization
-            for stock in processed_stocks:
+            for stock in stocks_to_monitor:
                 symbol = stock["symbol"]
                 if symbol not in self.monitored_stocks:
+                    # breakpoint()
                     self.monitored_stocks[symbol] = {
                         "active": True,
                         "in_position": False,
@@ -647,7 +650,7 @@ class TradingStrategyService:
                         "target_price": stock["target_price"],
                         "shares": stock["shares"],
                         "position_size": stock["position_size"],
-                        "hold_time": 900,  # 15 minutes in seconds
+                        "hold_time": 600,  # 10 minutes in seconds
                         "strategy_name": "execute_first_candle_breakout_strategy",
                     }
 
@@ -673,37 +676,38 @@ class TradingStrategyService:
 
 
 if __name__ == "__main__":
+    # x = TradingStrategyService(False)
+    # res = asyncio.run(
+    #     x.execute_first_candle_breakout_strategy(
+    #         params={
+    #             "min_price": 0.1,
+    #             "max_price": 10,
+    #             "min_volume": 10_000,
+    #             "min_diff_percent": -5,
+    #             "max_diff_percent": 1000,
+    #             "min_change_percent": -10,
+    #             "max_change_percent": 1000,
+    #             "limit": 1000,
+    #             "max_positions": 1000,
+    #             "position_size_percentage": 0.01,
+    #         }
+    #     )
+    # )
     x = TradingStrategyService(False)
-    res = asyncio.run(
-        x.execute_first_candle_breakout_strategy(
-            params={
-                "min_price": 0.1,
-                "max_price": 10,
-                "min_volume": 10_000,
-                "min_diff_percent": 2,
-                "max_diff_percent": 1000,
-                "min_change_percent": -10,
-                "max_change_percent": 1000,
-                "limit": 1000,
-                "max_positions": 1000,
-                "position_size_percentage": 0.01,
-            }
-        )
-    )
     res = asyncio.run(
         x.execute_open_below_prev_high_strategy(
             params={
                 "min_price": 0.1,
                 "max_price": 10,
-                "min_volume": 10_000,
+                "min_volume": 100_000,
                 "min_diff_percent": 2,
                 "max_diff_percent": 1000,
                 "min_change_percent": -10,
                 "max_change_percent": 1000,
                 "limit": 1000,
                 "max_positions": 1000,
-                "position_size_percentage": 0.01,
+                "position_size_percentage": 1,
             }
         )
     )
-    # logger.info(res)
+    logger.info(res)
